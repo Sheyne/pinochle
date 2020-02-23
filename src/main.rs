@@ -1,9 +1,9 @@
 /*--------------------------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See https://go.microsoft.com/fwlink/?linkid=2090316 for license information.
+ * Copyright (c) Sheyne Anderson. All rights reserved.
+ * Licensed under the MIT License.
  *-------------------------------------------------------------------------------------------------------------*/
 
 fn main() {
-    let name = "VS Code Remote - Containers";
+    let name = "Sheyne";
     println!("Hello, {}!", name);
 }
