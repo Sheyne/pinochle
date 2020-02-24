@@ -4,5 +4,9 @@ version = "0.1.0"
 authors = ["Sheyne Anderson <sheyne@sheyne.com>"]
 
 [lib]
-path ="./src/lib/lib.rs"
+path ="./src/lib/mod.rs"
 
+[dependencies]
+strum = "0.17.1"
+strum_macros = "0.17.1"
+itertools = "0.8.2"
