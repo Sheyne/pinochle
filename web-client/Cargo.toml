@@ -19,3 +19,4 @@ yew = "0.8"
 failure = "0.1.6"
 serde = "1.0"
 serde_json = "1.0"
+pinochle_lib = { path = "../pinochle_lib" }

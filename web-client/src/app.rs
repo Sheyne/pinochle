@@ -1,9 +1,13 @@
+extern crate pinochle_lib;
+
 use yew::prelude::*;
 use failure::Error;
 use yew::format::Json;
 use yew::services::ConsoleService;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use serde::{Deserialize, Serialize};
+
+use pinochle_lib::{is_legal};
 
 pub struct App {
     console: ConsoleService,
