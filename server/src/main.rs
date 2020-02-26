@@ -5,23 +5,37 @@
 extern crate ws;
 
 use ws::listen;
+extern crate pinochle_lib;
+extern crate strum;
+
+use pinochle_lib::{Card, Rank, Suit, Command, Response};
+#[macro_use] extern crate itertools;
+use strum::IntoEnumIterator;
 
 fn main() {
     listen("0.0.0.0:3012", |out| {
+        let cards : Vec<Card> = iproduct!(Suit::iter(), Rank::iter()).map(|(s, r)| Card {suit: s, rank: r}).collect();
+
         move |msg| {
-            println!("{}", msg);
-            out.send(msg)
+
+            match msg {
+                ws::Message::Text(m) => {
+                    let command: Command = serde_json::from_str(&m).unwrap();
+
+                    println!("Command: {:?}", command)
+                }
+                ws::Message::Binary(_) => println!("Binary message")
+            }
+
+            match serde_json::to_string(&Response::Update(cards.clone())) {
+                Ok(j) => out.send(j),
+                _ => panic!("Wat")
+            }
         }
     })
     .unwrap()
 }
 
-//  extern crate pinochle_lib;
-//  extern crate strum;
-
-//  use strum::IntoEnumIterator;
-//  use pinochle_lib::{Card, Rank, Suit, Board};
-//  #[macro_use] extern crate itertools;
 
 //  fn main() {
 //     let cards : Vec<Card> = iproduct!(Suit::iter(), Rank::iter()).map(|(s, r)| Card {suit: s, rank: r}).collect();

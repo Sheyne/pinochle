@@ -5,6 +5,8 @@ authors = ["Sheyne Anderson <sheyne@sheyne.com>"]
 
 [dependencies]
 strum = "0.17.1"
+serde = "1.0"
+serde_json = "1.0"
 pinochle-lib = { path = "../lib" }
 itertools = "0.8.2"
 ws = "*"

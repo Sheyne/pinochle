@@ -7,7 +7,7 @@ use yew::services::ConsoleService;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use serde::{Deserialize, Serialize};
 
-use pinochle_lib::{Card, Rank, Suit};
+use pinochle_lib::{Card, Rank, Suit, Response, Command};
 
 pub struct App {
     console: ConsoleService,
@@ -17,16 +17,11 @@ pub struct App {
     link: ComponentLink<App>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Command {
-    PlayCard(Card, String)
-}
-
 pub enum Msg {
     Connect,
     Disconnected,
     Send,
-    Received(Result<Command, Error>),
+    Received(Result<Response, Error>),
     TextInput(String),
     None
 }

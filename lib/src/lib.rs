@@ -4,6 +4,16 @@ extern crate strum_macros;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Command {
+    PlayCard(Card, String)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Response {
+    Update(Vec<Card>)
+}
+
 #[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize)]
 pub enum Suit {
     Diamond,
