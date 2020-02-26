@@ -3,10 +3,8 @@ name = "pinochle_server"
 version = "0.1.0"
 authors = ["Sheyne Anderson <sheyne@sheyne.com>"]
 
-[lib]
-path ="./src/lib/mod.rs"
-
 [dependencies]
 strum = "0.17.1"
 pinochle_lib = { path = "../pinochle_lib" }
 itertools = "0.8.2"
+ws = "*"

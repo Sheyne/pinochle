@@ -1,11 +1,10 @@
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
-
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use strum::IntoEnumIterator;
 
-#[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy)]
+#[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize)]
 pub enum Suit {
     Diamond,
     Club,
@@ -13,7 +12,7 @@ pub enum Suit {
     Spade,
 }
 
-#[derive(PartialEq, PartialOrd, Ord, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Ord, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize)]
 pub enum Rank {
     Nine,
     Jack,
@@ -23,7 +22,7 @@ pub enum Rank {
     Ace,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,

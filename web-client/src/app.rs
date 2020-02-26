@@ -7,7 +7,7 @@ use yew::services::ConsoleService;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use serde::{Deserialize, Serialize};
 
-use pinochle_lib::{is_legal};
+use pinochle_lib::{Card, Rank, Suit};
 
 pub struct App {
     console: ConsoleService,
@@ -17,16 +17,16 @@ pub struct App {
     link: ComponentLink<App>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Command {
-    message: String
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Command {
+    PlayCard(Card, String)
 }
 
 pub enum Msg {
     Connect,
     Disconnected,
     Send,
-    Received(Result<String, Error>),
+    Received(Result<Command, Error>),
     TextInput(String),
     None
 }
@@ -59,7 +59,7 @@ impl Component for App {
 					}
 				});
 				if self.ws.is_none() {
-					let task = self.wss.connect("wss://echo.websocket.org", cbout, cbnot.into());
+					let task = self.wss.connect("ws://localhost:3012/", cbout, cbnot.into());
 					self.ws = Some(task);
 				}
 				true
@@ -71,7 +71,14 @@ impl Component for App {
             Msg::Send => {
 				match self.ws {
 					Some(ref mut task) => {
-						task.send(Json(&self.pending_message));
+                        match serde_json::to_string(&Command::PlayCard(Card {suit: Suit::Heart, rank: Rank::Nine}, self.pending_message.clone())) {
+                            Ok(a) => {
+                                task.send(Ok(a))
+                            }
+                            Err(e) => self.console.log(&format!("Err {}", e)),
+                        }
+
+                        self.console.log(&format!("Sending"));
 						self.pending_message = "".to_string();
 						true
 					}
@@ -81,7 +88,7 @@ impl Component for App {
 				}
             }
 			Msg::Received(Ok(s)) => {
-                self.console.log(&format!("Received: {}", &s));
+                self.console.log(&format!("Received: {:?}", &s));
                 false
 			}
 			Msg::Received(Err(s)) => {
