@@ -6,15 +6,17 @@ use std::cmp::Ordering;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Command {
-    PlayCard(Card, String)
+    PlayCard(Card, String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    Update(Vec<Card>)
+    Update(Vec<Card>),
 }
 
-#[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize)]
+#[derive(
+    PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize,
+)]
 pub enum Suit {
     Diamond,
     Club,
@@ -22,7 +24,20 @@ pub enum Suit {
     Spade,
 }
 
-#[derive(PartialEq, PartialOrd, Ord, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize)]
+#[derive(
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    Debug,
+    EnumString,
+    EnumIter,
+    Display,
+    Clone,
+    Copy,
+    Deserialize,
+    Serialize,
+)]
 pub enum Rank {
     Nine,
     Jack,
@@ -121,40 +136,40 @@ fn compare_cards(c1: &Card, c2: &Card, led_suit: &Suit, trump_suit: &Suit) -> Or
 }
 
 impl Board {
-pub fn play(&mut self, card: Card) -> Result<(), &'static str> {
-    let hand = &mut self.hands[self.turn];
+    pub fn play(&mut self, card: Card) -> Result<(), &'static str> {
+        let hand = &mut self.hands[self.turn];
 
-    is_legal(&self.play_area, &hand, &card, self.trump)?;
+        is_legal(&self.play_area, &hand, &card, self.trump)?;
 
-    if let Some(position) = hand.iter().position(|&x| x == card) {
-        hand.remove(position);
-    } else {
-        return Err("Card not in hand");
+        if let Some(position) = hand.iter().position(|&x| x == card) {
+            hand.remove(position);
+        } else {
+            return Err("Card not in hand");
+        }
+        self.play_area.push(card);
+        self.turn = next_turn(self.turn);
+
+        if self.play_area.len() == 4 {
+            let first_player = self.turn;
+            let led_suit = self.play_area[0].suit;
+
+            let winner_rel_idx = self
+                .play_area
+                .iter()
+                .enumerate()
+                .max_by(|(_, c1), (_, c2)| compare_cards(c1, c2, &led_suit, &self.trump))
+                .expect("List known to have a max")
+                .0;
+
+            let winner = (winner_rel_idx + first_player) % NUMBER_OF_PLAYERS;
+            let winning_team = winner % NUMBER_OF_TEAMS;
+
+            self.taken[winning_team].extend(self.play_area.iter());
+            self.play_area.clear();
+        }
+
+        Ok(())
     }
-    self.play_area.push(card);
-    self.turn = next_turn(self.turn);
-
-    if self.play_area.len() == 4 {
-        let first_player = self.turn;
-        let led_suit = self.play_area[0].suit;
-
-        let winner_rel_idx = self
-            .play_area
-            .iter()
-            .enumerate()
-            .max_by(|(_, c1), (_, c2)| compare_cards(c1, c2, &led_suit, &self.trump))
-            .expect("List known to have a max")
-            .0;
-
-        let winner = (winner_rel_idx + first_player) % NUMBER_OF_PLAYERS;
-        let winning_team = winner % NUMBER_OF_TEAMS;
-
-        self.taken[winning_team].extend(self.play_area.iter());
-        self.play_area.clear();
-    }
-
-    Ok(())
-}
 }
 
 #[cfg(test)]

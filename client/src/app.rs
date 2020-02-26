@@ -1,13 +1,13 @@
 extern crate pinochle_lib;
 
-use yew::prelude::*;
 use failure::Error;
-use yew::format::Json;
-use yew::services::ConsoleService;
-use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use serde::{Deserialize, Serialize};
+use yew::format::Json;
+use yew::prelude::*;
+use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
+use yew::services::ConsoleService;
 
-use pinochle_lib::{Card, Rank, Suit, Response, Command};
+use pinochle_lib::{Card, Command, Rank, Response, Suit};
 
 pub struct App {
     console: ConsoleService,
@@ -23,7 +23,7 @@ pub enum Msg {
     Send,
     Received(Result<Response, Error>),
     TextInput(String),
-    None
+    None,
 }
 
 impl Component for App {
@@ -43,58 +43,57 @@ impl Component for App {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Connect => {
-				self.console.log("Connecting");
-				let cbout = self.link.send_back(|Json(data)| Msg::Received(data));
-				let cbnot = self.link.send_back(|input| {
-					match input {
-						WebSocketStatus::Closed | WebSocketStatus::Error => {
-							Msg::Disconnected
-						}
-						_ => Msg::None,
-					}
-				});
-				if self.ws.is_none() {
-					let task = self.wss.connect("ws://localhost:3012/", cbout, cbnot.into());
-					self.ws = Some(task);
-				}
-				true
-			}
-			Msg::Disconnected => {
-				self.ws = None;
-				true
+                self.console.log("Connecting");
+                let cbout = self.link.send_back(|Json(data)| Msg::Received(data));
+                let cbnot = self.link.send_back(|input| match input {
+                    WebSocketStatus::Closed | WebSocketStatus::Error => Msg::Disconnected,
+                    _ => Msg::None,
+                });
+                if self.ws.is_none() {
+                    let task = self
+                        .wss
+                        .connect("ws://localhost:3012/", cbout, cbnot.into());
+                    self.ws = Some(task);
+                }
+                true
             }
-            Msg::Send => {
-				match self.ws {
-					Some(ref mut task) => {
-                        match serde_json::to_string(&Command::PlayCard(Card {suit: Suit::Heart, rank: Rank::Nine}, self.pending_message.clone())) {
-                            Ok(a) => {
-                                task.send(Ok(a))
-                            }
-                            Err(e) => self.console.log(&format!("Err {}", e)),
-                        }
+            Msg::Disconnected => {
+                self.ws = None;
+                true
+            }
+            Msg::Send => match self.ws {
+                Some(ref mut task) => {
+                    match serde_json::to_string(&Command::PlayCard(
+                        Card {
+                            suit: Suit::Heart,
+                            rank: Rank::Nine,
+                        },
+                        self.pending_message.clone(),
+                    )) {
+                        Ok(a) => task.send(Ok(a)),
+                        Err(e) => self.console.log(&format!("Err {}", e)),
+                    }
 
-                        self.console.log(&format!("Sending"));
-						self.pending_message = "".to_string();
-						true
-					}
-					None => {
-						false
-					}
-				}
-            }
-			Msg::Received(Ok(s)) => {
+                    self.console.log(&format!("Sending"));
+                    self.pending_message = "".to_string();
+                    true
+                }
+                None => false,
+            },
+            Msg::Received(Ok(s)) => {
                 self.console.log(&format!("Received: {:?}", &s));
                 false
-			}
-			Msg::Received(Err(s)) => {
-				self.console.log(&format!("Error when reading data from server: {}", &s));
-				false
-			}
+            }
+            Msg::Received(Err(s)) => {
+                self.console
+                    .log(&format!("Error when reading data from server: {}", &s));
+                false
+            }
             Msg::TextInput(x) => {
                 self.pending_message = x;
                 false
             }
-            Msg::None => false
+            Msg::None => false,
         }
     }
 }
