@@ -238,7 +238,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "pinochle_lib"
+name = "pinochle-lib"
 version = "0.1.0"
 dependencies = [
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -248,11 +248,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "pinochle_server"
+name = "pinochle-server"
 version = "0.1.0"
 dependencies = [
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "pinochle_lib 0.1.0",
+ "pinochle-lib 0.1.0",
  "strum 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
