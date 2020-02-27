@@ -9,9 +9,9 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=pinochle",
-                    "--package=pinochle",
-                    "--manifest-path=Cargo.toml"
+                    "--bin=pinochle-server",
+                    "--package=pinochle-server",
+                    "--manifest-path=server/Cargo.toml"
                 ],
                 "filter": {
                     "kind": "bin"

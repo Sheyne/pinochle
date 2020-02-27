@@ -1,12 +1,16 @@
-extern crate strum;
-#[macro_use]
-extern crate strum_macros;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use strum_macros::{Display, EnumIter, EnumString};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Action {
+    PlayCard(Card, String),
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Command {
-    PlayCard(Card, String),
+    Action(Action),
+    Connect(String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

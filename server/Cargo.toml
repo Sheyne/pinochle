@@ -2,11 +2,12 @@
 name = "pinochle-server"
 version = "0.1.0"
 authors = ["Sheyne Anderson <sheyne@sheyne.com>"]
+edition = "2018"
 
 [dependencies]
-strum = "0.17.1"
+itertools = "0.8.2"
+pinochle-lib = { path = "../lib" }
 serde = "1.0"
 serde_json = "1.0"
-pinochle-lib = { path = "../lib" }
-itertools = "0.8.2"
-ws = "*"
+strum = "0.1"
+tungstenite = "0.10"

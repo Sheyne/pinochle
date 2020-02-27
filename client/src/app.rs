@@ -1,13 +1,10 @@
-extern crate pinochle_lib;
-
 use failure::Error;
-use serde::{Deserialize, Serialize};
 use yew::format::Json;
 use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
 
-use pinochle_lib::{Card, Command, Rank, Response, Suit};
+use pinochle_lib::{Action, Card, Command, Rank, Response, Suit};
 
 pub struct App {
     console: ConsoleService,
@@ -50,9 +47,16 @@ impl Component for App {
                     _ => Msg::None,
                 });
                 if self.ws.is_none() {
-                    let task = self
+                    let mut task = self
                         .wss
                         .connect("ws://localhost:3012/", cbout, cbnot.into());
+
+                    match serde_json::to_string(&Command::Connect(self.pending_message.to_string()))
+                    {
+                        Ok(a) => task.send(Ok(a)),
+                        Err(e) => self.console.log(&format!("Err {}", e)),
+                    }
+
                     self.ws = Some(task);
                 }
                 true
@@ -63,13 +67,13 @@ impl Component for App {
             }
             Msg::Send => match self.ws {
                 Some(ref mut task) => {
-                    match serde_json::to_string(&Command::PlayCard(
+                    match serde_json::to_string(&Command::Action(Action::PlayCard(
                         Card {
                             suit: Suit::Heart,
                             rank: Rank::Nine,
                         },
                         self.pending_message.clone(),
-                    )) {
+                    ))) {
                         Ok(a) => task.send(Ok(a)),
                         Err(e) => self.console.log(&format!("Err {}", e)),
                     }
