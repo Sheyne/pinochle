@@ -1,6 +1,10 @@
 use super::core::*;
+use itertools::{chain, iproduct};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use strum::IntoEnumIterator;
 
 const NUMBER_OF_TEAMS: usize = 2;
 const PLAYERS_PER_TEAM: usize = 2;
@@ -11,7 +15,8 @@ pub struct PlayerData {
     pub player: usize,
     pub hand: Vec<Card>,
     pub play_area: Vec<Card>,
-    pub taken: [usize; NUMBER_OF_TEAMS],
+    pub weve_taken: usize,
+    pub theyve_taken: usize,
     pub turn: usize,
     pub trump: Suit,
 }
@@ -26,8 +31,26 @@ pub struct Board {
 
 impl Board {
     pub fn shuffle() -> Board {
-        //     let cards : Vec<Card> = iproduct!(Suit::iter(), Rank::iter()).map(|(s, r)| Card {suit: s, rank: r}).collect();
-        Board::new([vec![], vec![], vec![], vec![]])
+        let mut cards: Vec<Card> = chain(
+            iproduct!(Suit::iter(), Rank::iter()),
+            iproduct!(Suit::iter(), Rank::iter()),
+        )
+        .map(|(s, r)| Card { suit: s, rank: r })
+        .collect();
+
+        let mut rng = thread_rng();
+        cards.as_mut_slice().shuffle(&mut rng);
+        let cards = cards;
+
+        let cards_each: usize = cards.len() / 4;
+        let mut iter = cards.chunks(cards_each);
+
+        Board::new([
+            iter.next().unwrap().to_vec(),
+            iter.next().unwrap().to_vec(),
+            iter.next().unwrap().to_vec(),
+            iter.next().unwrap().to_vec(),
+        ])
     }
 
     pub fn new(hands: [Vec<Card>; 4]) -> Board {
@@ -45,7 +68,8 @@ impl Board {
             player: player,
             hand: self.hands[player].clone(),
             play_area: self.play_area.clone(),
-            taken: [self.taken[0].len(), self.taken[1].len()],
+            weve_taken: self.taken[0].len(),
+            theyve_taken: self.taken[1].len(),
             turn: self.turn,
             trump: self.trump,
         }

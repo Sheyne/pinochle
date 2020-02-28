@@ -3,7 +3,7 @@
  * Licensed under the MIT License.
  *-------------------------------------------------------------------------------------------------------------*/
 
-use pinochle_lib::{Action, Board, Card, Command, Rank, Response, ResponseError, Suit};
+use pinochle_lib::{Action, Board, Command, Response, ResponseError};
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
@@ -41,8 +41,16 @@ impl GameServer {
     ) -> Result<(), tungstenite::error::Error> {
         match command {
             Command::Connect(id) => {
+                let player = self.game.read().unwrap().board.get(0);
+
+                let result = socket
+                    .lock()
+                    .unwrap()
+                    .write_message(Message::Text(to_string(&Response::Update(player)).unwrap()));
+
                 self.sockets.write().unwrap().insert(id, socket);
-                Ok(())
+
+                result
             }
             Command::Action(a) => {
                 let sockets = self.sockets.read().unwrap();
@@ -83,11 +91,21 @@ fn main() {
         spawn(move || {
             let websocket = Arc::new(Mutex::new(accept(stream.unwrap()).unwrap()));
             loop {
-                let msg = websocket.lock().unwrap().read_message().unwrap();
+                let msg = websocket.lock().unwrap().read_message();
 
-                if let Message::Text(s) = msg {
-                    if let Err(err) = game_server.send(websocket.clone(), from_str(&s).unwrap()) {
+                match msg {
+                    Ok(msg) => {
+                        if let Message::Text(s) = msg {
+                            if let Err(err) =
+                                game_server.send(websocket.clone(), from_str(&s).unwrap())
+                            {
+                                println!("Error: {}", err);
+                            }
+                        }
+                    }
+                    Err(err) => {
                         println!("Error: {}", err);
+                        break;
                     }
                 }
             }

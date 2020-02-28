@@ -4,14 +4,21 @@ use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
 
-use pinochle_lib::{Action, Card, Command, Rank, Response, Suit};
+use pinochle_lib::{Action, Card, Command, PlayerData, Rank, Response, Suit};
+
+enum State {
+    Playing(PlayerData),
+    Ready,
+}
 
 pub struct App {
     console: ConsoleService,
-    pending_message: String,
+    name: String,
     ws: Option<WebSocketTask>,
     wss: WebSocketService,
     link: ComponentLink<App>,
+
+    state: State,
 }
 
 pub enum Msg {
@@ -20,7 +27,7 @@ pub enum Msg {
     Connected,
     Send,
     Received(Result<Response, Error>),
-    TextInput(String),
+    EnterName(String),
     None,
 }
 
@@ -30,7 +37,8 @@ impl Component for App {
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         App {
-            pending_message: "".to_string(),
+            name: "".to_string(),
+            state: State::Ready,
             ws: None,
             wss: WebSocketService::new(),
             console: ConsoleService::new(),
@@ -59,9 +67,7 @@ impl Component for App {
             Msg::Connected => {
                 match &mut self.ws {
                     Some(task) => {
-                        match serde_json::to_string(&Command::Connect(
-                            self.pending_message.to_string(),
-                        )) {
+                        match serde_json::to_string(&Command::Connect(self.name.to_string())) {
                             Ok(a) => {
                                 self.console.log(&format!("sending {}", a));
                                 task.send(Ok(a));
@@ -86,24 +92,28 @@ impl Component for App {
                         Ok(a) => task.send(Ok(a)),
                         Err(e) => self.console.log(&format!("Err {}", e)),
                     }
-
-                    self.console.log(&format!("Sending"));
-                    self.pending_message = "".to_string();
-                    true
+                    false
                 }
                 None => false,
             },
-            Msg::Received(Ok(s)) => {
-                self.console.log(&format!("Received: {:?}", &s));
-                false
+            Msg::Received(Ok(response)) => {
+                match response {
+                    Response::Update(data) => {
+                        self.state = State::Playing(data);
+                    }
+                    Response::Error(e) => {
+                        self.console.log(&format!("Error: {:?}", &e));
+                    }
+                }
+                true
             }
             Msg::Received(Err(s)) => {
                 self.console
                     .log(&format!("Error when reading data from server: {}", &s));
                 false
             }
-            Msg::TextInput(x) => {
-                self.pending_message = x;
+            Msg::EnterName(x) => {
+                self.name = x;
                 false
             }
             Msg::None => false,
@@ -113,15 +123,22 @@ impl Component for App {
 
 impl Renderable<App> for App {
     fn view(&self) -> Html<Self> {
-        html! {
-            <div>
-                <input
-                    type="text"
-                    value={&self.pending_message}
-                    oninput=|e| Msg::TextInput(e.value) />
-                <button onclick=|_| Msg::Send,>{ "Send" }</button>
-                <button onclick=|_| Msg::Connect,>{ "Connect" }</button>
-                </div>
+        match &self.state {
+            State::Ready => html! {
+                <div>
+                    <input
+                        type="text"
+                        value={&self.name}
+                        oninput=|e| Msg::EnterName(e.value) />
+                    <button onclick=|_| Msg::Connect>{ "Connect" }</button>
+                    </div>
+            },
+
+            State::Playing(data) => {
+                html! {
+                    <div>{ data.hand[0].to_string() }</div>
+                }
+            }
         }
     }
 }

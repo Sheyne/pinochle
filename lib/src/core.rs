@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumIter, EnumString};
+use strum_macros::{EnumIter, EnumString};
 
-#[derive(
-    PartialEq, Eq, Debug, EnumString, EnumIter, Display, Clone, Copy, Deserialize, Serialize,
-)]
+#[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Clone, Copy, Deserialize, Serialize)]
 pub enum Suit {
     Diamond,
     Club,
@@ -11,19 +9,19 @@ pub enum Suit {
     Spade,
 }
 
+impl Suit {
+    pub fn to_string(&self) -> &str {
+        match self {
+            Suit::Diamond => "♦",
+            Suit::Club => "♣",
+            Suit::Heart => "♥",
+            Suit::Spade => "♠",
+        }
+    }
+}
+
 #[derive(
-    PartialEq,
-    PartialOrd,
-    Ord,
-    Eq,
-    Debug,
-    EnumString,
-    EnumIter,
-    Display,
-    Clone,
-    Copy,
-    Deserialize,
-    Serialize,
+    PartialEq, PartialOrd, Ord, Eq, Debug, EnumString, EnumIter, Clone, Copy, Deserialize, Serialize,
 )]
 pub enum Rank {
     Nine,
@@ -34,10 +32,29 @@ pub enum Rank {
     Ace,
 }
 
+impl Rank {
+    pub fn to_string(&self) -> &str {
+        match self {
+            Rank::Nine => "9",
+            Rank::Jack => "J",
+            Rank::Queen => "Q",
+            Rank::King => "K",
+            Rank::Ten => "10",
+            Rank::Ace => "A",
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,
+}
+
+impl Card {
+    pub fn to_string(&self) -> String {
+        format!("{}{}", self.rank.to_string(), self.suit.to_string())
+    }
 }
 
 #[test]
