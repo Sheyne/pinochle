@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use strum_macros::{Display, EnumIter, EnumString};
 use super::core::*;
 
 const NUMBER_OF_TEAMS: usize = 2;
