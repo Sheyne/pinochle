@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString};
+use strum_macros::{Display, EnumIter, EnumString};
 
-#[derive(PartialEq, Eq, Debug, EnumString, EnumIter, Clone, Copy, Deserialize, Serialize)]
+#[derive(
+    PartialEq, Eq, Debug, EnumString, EnumIter, Clone, Copy, Deserialize, Serialize, Display,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Suit {
     Diamond,
     Club,
@@ -21,8 +25,21 @@ impl Suit {
 }
 
 #[derive(
-    PartialEq, PartialOrd, Ord, Eq, Debug, EnumString, EnumIter, Clone, Copy, Deserialize, Serialize,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    Debug,
+    EnumString,
+    EnumIter,
+    Clone,
+    Copy,
+    Display,
+    Deserialize,
+    Serialize,
 )]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Rank {
     Nine,
     Jack,
@@ -46,6 +63,7 @@ impl Rank {
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Card {
     pub suit: Suit,
     pub rank: Rank,

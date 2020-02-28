@@ -22,4 +22,7 @@ pub enum Response {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ResponseError {
     NotConnected,
+    NotYourTurn,
+    NotPlaying,
+    GameError(String),
 }

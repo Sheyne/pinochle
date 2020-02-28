@@ -4,7 +4,7 @@ use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
 
-use pinochle_lib::{Action, Card, Command, PlayerData, Rank, Response, Suit};
+use pinochle_lib::{Action, Card, Command, PlayerData, Response};
 
 enum State {
     Playing(PlayerData),
@@ -25,10 +25,9 @@ pub enum Msg {
     Connect,
     Disconnected,
     Connected,
-    Send,
+    PlayCard(Card),
     Received(Result<Response, Error>),
     EnterName(String),
-    None,
 }
 
 impl Component for App {
@@ -83,19 +82,15 @@ impl Component for App {
                 self.ws = None;
                 true
             }
-            Msg::Send => match self.ws {
-                Some(ref mut task) => {
-                    match serde_json::to_string(&Command::Action(Action::PlayCard(Card {
-                        suit: Suit::Heart,
-                        rank: Rank::Nine,
-                    }))) {
-                        Ok(a) => task.send(Ok(a)),
-                        Err(e) => self.console.log(&format!("Err {}", e)),
-                    }
-                    false
+            Msg::PlayCard(card) => {
+                if let Some(ref mut task) = self.ws {
+                    task.send(Ok(serde_json::to_string(&Command::Action(
+                        Action::PlayCard(card),
+                    ))
+                    .unwrap()));
                 }
-                None => false,
-            },
+                false
+            }
             Msg::Received(Ok(response)) => {
                 match response {
                     Response::Update(data) => {
@@ -116,8 +111,17 @@ impl Component for App {
                 self.name = x;
                 false
             }
-            Msg::None => false,
         }
+    }
+}
+
+fn to_html(card: &Card) -> Html<App> {
+    let card = card.clone();
+    html! {
+        <div class={ format!("suit-{} card", card.suit) }
+             onclick=move |e| Msg::PlayCard(card) >
+        { card.to_string() }
+        </div>
     }
 }
 
@@ -131,12 +135,16 @@ impl Renderable<App> for App {
                         value={&self.name}
                         oninput=|e| Msg::EnterName(e.value) />
                     <button onclick=|_| Msg::Connect>{ "Connect" }</button>
-                    </div>
+                </div>
             },
 
             State::Playing(data) => {
                 html! {
-                    <div>{ data.hand[0].to_string() }</div>
+                    <div>
+                        <div> { "Position: " } { data.player } </div>
+                        <div id="hand">{ for data.hand.iter().map(|c| to_html(c)) }</div>
+                        <div id="play-area">{ for data.play_area.iter().map(|c| to_html(c)) }</div>
+                    </div>
                 }
             }
         }

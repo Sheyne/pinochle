@@ -1,0 +1,26 @@
+.suit-heart, .suit-diamond {
+    color: red;
+}
+
+.suit-spade, .suit-club {
+    color: black;
+}
+
+.card {
+    display: inline-block;
+    width: 2em;
+    height: 3em;
+    border: 0.1em solid grey;
+    border-radius: .5em;
+    margin: .2em;
+    padding: .2em;
+    cursor: pointer;
+}
+
+.card:hover {
+    background-color: #fafafa;
+}
+
+.card:active {
+    background-color: #f0f0f0;
+}
