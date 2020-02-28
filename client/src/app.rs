@@ -17,6 +17,7 @@ pub struct App {
 pub enum Msg {
     Connect,
     Disconnected,
+    Connected,
     Send,
     Received(Result<Response, Error>),
     TextInput(String),
@@ -44,22 +45,33 @@ impl Component for App {
                 let cbout = self.link.send_back(|Json(data)| Msg::Received(data));
                 let cbnot = self.link.send_back(|input| match input {
                     WebSocketStatus::Closed | WebSocketStatus::Error => Msg::Disconnected,
-                    _ => Msg::None,
+                    WebSocketStatus::Opened => Msg::Connected,
                 });
                 if self.ws.is_none() {
-                    let mut task = self
+                    let task = self
                         .wss
                         .connect("ws://localhost:3012/", cbout, cbnot.into());
-
-                    match serde_json::to_string(&Command::Connect(self.pending_message.to_string()))
-                    {
-                        Ok(a) => task.send(Ok(a)),
-                        Err(e) => self.console.log(&format!("Err {}", e)),
-                    }
 
                     self.ws = Some(task);
                 }
                 true
+            }
+            Msg::Connected => {
+                match &mut self.ws {
+                    Some(task) => {
+                        match serde_json::to_string(&Command::Connect(
+                            self.pending_message.to_string(),
+                        )) {
+                            Ok(a) => {
+                                self.console.log(&format!("sending {}", a));
+                                task.send(Ok(a));
+                            }
+                            Err(e) => self.console.log(&format!("Err {}", e)),
+                        }
+                    }
+                    _ => (),
+                }
+                false
             }
             Msg::Disconnected => {
                 self.ws = None;
@@ -67,13 +79,10 @@ impl Component for App {
             }
             Msg::Send => match self.ws {
                 Some(ref mut task) => {
-                    match serde_json::to_string(&Command::Action(Action::PlayCard(
-                        Card {
-                            suit: Suit::Heart,
-                            rank: Rank::Nine,
-                        },
-                        self.pending_message.clone(),
-                    ))) {
+                    match serde_json::to_string(&Command::Action(Action::PlayCard(Card {
+                        suit: Suit::Heart,
+                        rank: Rank::Nine,
+                    }))) {
                         Ok(a) => task.send(Ok(a)),
                         Err(e) => self.console.log(&format!("Err {}", e)),
                     }

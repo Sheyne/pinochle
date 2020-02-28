@@ -31,11 +31,7 @@ impl GameServer {
     fn send(&self, socket: Arc<Mutex<WebSocket<TcpStream>>>, command: Command) {
         match command {
             Command::Connect(id) => {
-                self.sockets
-                    .write()
-                    .unwrap()
-                    .insert(id, socket)
-                    .expect("insert succeeds");
+                self.sockets.write().unwrap().insert(id, socket);
             }
             Command::Action(a) => {
                 let sockets = self.sockets.read().unwrap();

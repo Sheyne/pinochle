@@ -4,7 +4,7 @@ use strum_macros::{Display, EnumIter, EnumString};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Action {
-    PlayCard(Card, String),
+    PlayCard(Card),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
