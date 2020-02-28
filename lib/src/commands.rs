@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use super::core::*;
 use super::board::*;
+use super::core::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Action {

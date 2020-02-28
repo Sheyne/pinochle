@@ -1,6 +1,6 @@
+use super::core::*;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use super::core::*;
 
 const NUMBER_OF_TEAMS: usize = 2;
 const PLAYERS_PER_TEAM: usize = 2;

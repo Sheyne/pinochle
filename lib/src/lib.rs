@@ -1,5 +1,5 @@
-mod board;
-mod core;
-mod commands;
+pub use self::{board::*, commands::*, core::*};
 
-pub use self::{board::*, core::*, commands::*};
+mod board;
+mod commands;
+mod core;
