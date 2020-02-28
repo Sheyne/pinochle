@@ -3,7 +3,7 @@
  * Licensed under the MIT License.
  *-------------------------------------------------------------------------------------------------------------*/
 
-use pinochle_lib::{Action, Card, Command, Rank, Response, Suit};
+use pinochle_lib::{Action, Board, Card, Command, Rank, Response, ResponseError, Suit};
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
@@ -12,13 +12,19 @@ use std::thread::spawn;
 use tungstenite::{protocol::WebSocket, server::accept, Message};
 
 struct Game {
-    cards: Vec<Card>,
+    board: Board,
 }
 
 impl Game {
+    fn new() -> Game {
+        Game {
+            board: Board::new(),
+        }
+    }
+
     fn run(&mut self, player: &str, action: Action) -> Response {
         println!("{} doing {:?}", player, action);
-        Response::Update(self.cards.clone())
+        Response::Update(self.board.get(0))
     }
 }
 
@@ -28,26 +34,33 @@ struct GameServer {
 }
 
 impl GameServer {
-    fn send(&self, socket: Arc<Mutex<WebSocket<TcpStream>>>, command: Command) {
+    fn send(
+        &self,
+        socket: Arc<Mutex<WebSocket<TcpStream>>>,
+        command: Command,
+    ) -> Result<(), tungstenite::error::Error> {
         match command {
             Command::Connect(id) => {
                 self.sockets.write().unwrap().insert(id, socket);
+                Ok(())
             }
             Command::Action(a) => {
                 let sockets = self.sockets.read().unwrap();
-                let (id, _) = sockets
+                let id = sockets
                     .iter()
                     .filter(|(_, s)| Arc::ptr_eq(s, &socket))
-                    .next()
-                    .unwrap();
-                let response = self.game.write().unwrap().run(id, a);
+                    .map(|(id, _)| id)
+                    .next();
+
+                let response = match id {
+                    Some(id) => self.game.write().unwrap().run(id, a),
+                    None => Response::Error(ResponseError::NotConnected),
+                };
+
                 socket
                     .lock()
                     .unwrap()
-                    .write_message(Message::Text(to_string(&response).unwrap()));
-            }
-            _ => {
-                panic!("Boom");
+                    .write_message(Message::Text(to_string(&response).unwrap()))
             }
         }
     }
@@ -55,7 +68,7 @@ impl GameServer {
     fn new() -> GameServer {
         GameServer {
             sockets: RwLock::new(HashMap::new()),
-            game: RwLock::new(Game { cards: vec![] }),
+            game: RwLock::new(Game::new()),
         }
     }
 }
@@ -72,11 +85,10 @@ fn main() {
             loop {
                 let msg = websocket.lock().unwrap().read_message().unwrap();
 
-                match msg {
-                    Message::Text(s) => {
-                        game_server.send(websocket.clone(), from_str(&s).unwrap());
+                if let Message::Text(s) = msg {
+                    if let Err(err) = game_server.send(websocket.clone(), from_str(&s).unwrap()) {
+                        println!("Error: {}", err);
                     }
-                    _ => (),
                 }
             }
         });

@@ -15,7 +15,13 @@ pub enum Command {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    Update(Vec<Card>),
+    Update(PlayerData),
+    Error(ResponseError),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ResponseError {
+    NotConnected,
 }
 
 #[derive(
@@ -67,12 +73,80 @@ const NUMBER_OF_TEAMS: usize = 2;
 const PLAYERS_PER_TEAM: usize = 2;
 const NUMBER_OF_PLAYERS: usize = NUMBER_OF_TEAMS * PLAYERS_PER_TEAM;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlayerData {
+    pub player: usize,
+    pub hand: Vec<Card>,
+    pub play_area: Vec<Card>,
+    pub taken: [usize; NUMBER_OF_TEAMS],
+    pub turn: usize,
+    pub trump: Suit,
+}
+
 pub struct Board {
     pub hands: [Vec<Card>; NUMBER_OF_PLAYERS],
     pub play_area: Vec<Card>,
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub turn: usize,
     pub trump: Suit,
+}
+
+impl Board {
+    pub fn new() -> Board {
+        Board {
+            hands: [vec![], vec![], vec![], vec![]],
+            play_area: vec![],
+            taken: [vec![], vec![]],
+            turn: 0,
+            trump: Suit::Heart,
+        }
+    }
+
+    pub fn get(&self, player: usize) -> PlayerData {
+        PlayerData {
+            player: player,
+            hand: self.hands[player].clone(),
+            play_area: self.play_area.clone(),
+            taken: [self.taken[0].len(), self.taken[1].len()],
+            turn: self.turn,
+            trump: self.trump,
+        }
+    }
+
+    pub fn play(&mut self, card: Card) -> Result<(), &'static str> {
+        let hand = &mut self.hands[self.turn];
+
+        is_legal(&self.play_area, &hand, &card, self.trump)?;
+
+        if let Some(position) = hand.iter().position(|&x| x == card) {
+            hand.remove(position);
+        } else {
+            return Err("Card not in hand");
+        }
+        self.play_area.push(card);
+        self.turn = next_turn(self.turn);
+
+        if self.play_area.len() == 4 {
+            let first_player = self.turn;
+            let led_suit = self.play_area[0].suit;
+
+            let winner_rel_idx = self
+                .play_area
+                .iter()
+                .enumerate()
+                .max_by(|(_, c1), (_, c2)| compare_cards(c1, c2, &led_suit, &self.trump))
+                .expect("List known to have a max")
+                .0;
+
+            let winner = (winner_rel_idx + first_player) % NUMBER_OF_PLAYERS;
+            let winning_team = winner % NUMBER_OF_TEAMS;
+
+            self.taken[winning_team].extend(self.play_area.iter());
+            self.play_area.clear();
+        }
+
+        Ok(())
+    }
 }
 
 fn next_turn(player: usize) -> usize {
@@ -136,43 +210,6 @@ fn compare_cards(c1: &Card, c2: &Card, led_suit: &Suit, trump_suit: &Suit) -> Or
 
             Ordering::Equal
         }
-    }
-}
-
-impl Board {
-    pub fn play(&mut self, card: Card) -> Result<(), &'static str> {
-        let hand = &mut self.hands[self.turn];
-
-        is_legal(&self.play_area, &hand, &card, self.trump)?;
-
-        if let Some(position) = hand.iter().position(|&x| x == card) {
-            hand.remove(position);
-        } else {
-            return Err("Card not in hand");
-        }
-        self.play_area.push(card);
-        self.turn = next_turn(self.turn);
-
-        if self.play_area.len() == 4 {
-            let first_player = self.turn;
-            let led_suit = self.play_area[0].suit;
-
-            let winner_rel_idx = self
-                .play_area
-                .iter()
-                .enumerate()
-                .max_by(|(_, c1), (_, c2)| compare_cards(c1, c2, &led_suit, &self.trump))
-                .expect("List known to have a max")
-                .0;
-
-            let winner = (winner_rel_idx + first_player) % NUMBER_OF_PLAYERS;
-            let winning_team = winner % NUMBER_OF_TEAMS;
-
-            self.taken[winning_team].extend(self.play_area.iter());
-            self.play_area.clear();
-        }
-
-        Ok(())
     }
 }
 
