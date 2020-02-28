@@ -18,7 +18,7 @@ struct Game {
 impl Game {
     fn new() -> Game {
         Game {
-            board: Board::new(),
+            board: Board::shuffle(),
         }
     }
 
@@ -161,7 +161,6 @@ fn main() {
 // }
 
 //  fn main() {
-//     let cards : Vec<Card> = iproduct!(Suit::iter(), Rank::iter()).map(|(s, r)| Card {suit: s, rank: r}).collect();
 
 //     print!("Cards: ");
 //     for card in cards {
