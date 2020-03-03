@@ -1,4 +1,5 @@
-use failure::Error;
+use anyhow::Error;
+use yew::events::InputData;
 use yew::format::Json;
 use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
@@ -48,18 +49,18 @@ impl Component for App {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::Connect => {
-                self.console.log("Connecting");
-                let cbout = self.link.send_back(|Json(data)| Msg::Received(data));
-                let cbnot = self.link.send_back(|input| match input {
+                let cbout = self.link.callback(|Json(data)| Msg::Received(data));
+                let cbnot = self.link.callback(|input: WebSocketStatus| match input {
                     WebSocketStatus::Closed | WebSocketStatus::Error => Msg::Disconnected,
                     WebSocketStatus::Opened => Msg::Connected,
                 });
                 if self.ws.is_none() {
-                    let task = self
-                        .wss
-                        .connect("ws://localhost:3012/", cbout, cbnot.into());
+                    let task = self.wss.connect_text("ws://localhost:3012/", cbout, cbnot);
 
-                    self.ws = Some(task);
+                    match task {
+                        Ok(t) => self.ws = Some(t),
+                        Err(_) => self.ws = None,
+                    }
                 }
                 true
             }
@@ -113,28 +114,16 @@ impl Component for App {
             }
         }
     }
-}
 
-fn to_html(card: &Card) -> Html<App> {
-    let card = card.clone();
-    html! {
-        <div class={ format!("suit-{} card", card.suit) }
-             onclick=move |e| Msg::PlayCard(card) >
-        { card.to_string() }
-        </div>
-    }
-}
-
-impl Renderable<App> for App {
-    fn view(&self) -> Html<Self> {
+    fn view(&self) -> Html {
         match &self.state {
             State::Ready => html! {
                 <div>
                     <input
                         type="text"
                         value={&self.name}
-                        oninput=|e| Msg::EnterName(e.value) />
-                    <button onclick=|_| Msg::Connect>{ "Connect" }</button>
+                        oninput=self.link.callback(|e: InputData| Msg::EnterName(e.value)) />
+                    <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
                 </div>
             },
 
@@ -142,11 +131,21 @@ impl Renderable<App> for App {
                 html! {
                     <div>
                         <div> { "Position: " } { data.player } </div>
-                        <div id="hand">{ for data.hand.iter().map(|c| to_html(c)) }</div>
-                        <div id="play-area">{ for data.play_area.iter().map(|c| to_html(c)) }</div>
+                        <div id="hand">{ for data.hand.iter().map(|c| to_html(&self.link, c)) }</div>
+                        <div id="play-area">{ for data.play_area.iter().map(|c| to_html(&self.link, c)) }</div>
                     </div>
                 }
             }
         }
+    }
+}
+
+fn to_html(link: &ComponentLink<App>, card: &Card) -> Html {
+    let card = card.clone();
+    html! {
+        <div class={ format!("suit-{} card", card.suit) }
+             onclick=link.callback(move |e| Msg::PlayCard(card)) >
+        { card.to_string() }
+        </div>
     }
 }
