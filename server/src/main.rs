@@ -1,3 +1,6 @@
+use futures_util::StreamExt;
+use pinochle_lib::Command;
+use serde_json::from_str;
 use std::{
     collections::HashMap,
     env,
@@ -5,61 +8,45 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
-
-use futures::channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::{future, pin_mut, stream::TryStreamExt, StreamExt};
-
 use tokio::net::{TcpListener, TcpStream};
 use tungstenite::protocol::Message;
 
-type Tx = UnboundedSender<Message>;
-type PeerMap = Mutex<HashMap<SocketAddr, Tx>>;
+mod game;
+use game::Game;
 
-fn get_message(addr: SocketAddr, peer_map: &PeerMap, msg: &str) {
-    println!("Msg: {}", msg);
-
-    let peers = peer_map.lock().unwrap();
-
-    // We want to broadcast the message to everyone except ourselves.
-    let broadcast_recipients = peers
-        .iter()
-        // .filter(|(peer_addr, _)| peer_addr != &&addr)
-        .map(|(_, ws_sink)| ws_sink);
-
-    for recp in broadcast_recipients {
-        recp.unbounded_send(Message::Text(msg.to_owned())).unwrap();
-    }
+struct State {
+    games: HashMap<String, Arc<Game>>,
 }
 
-async fn handle_connection(peer_map: Arc<PeerMap>, raw_stream: TcpStream, addr: SocketAddr) {
+async fn handle_connection(state: Arc<Mutex<State>>, raw_stream: TcpStream, addr: SocketAddr) {
     println!("Incoming TCP connection from: {}", addr);
 
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+    let mut ws_stream = tokio_tungstenite::accept_async(raw_stream)
         .await
         .expect("Error during the websocket handshake occurred");
     println!("WebSocket connection established: {}", addr);
 
-    // Insert the write part of this peer to the peer map.
-    let (tx, rx) = unbounded();
-    peer_map.lock().unwrap().insert(addr, tx);
+    let message = ws_stream.next().await;
+    if let Some(Ok(Message::Text(text))) = message {
+        match from_str(&text) {
+            Ok(Command::Connect(room)) => {
+                let game = state
+                    .lock()
+                    .unwrap()
+                    .games
+                    .entry(room)
+                    .or_insert(Arc::new(Game::new()))
+                    .clone();
 
-    let (outgoing, incoming) = ws_stream.split();
-
-    let broadcast_incoming = incoming.try_for_each(|msg| {
-        if let Message::Text(msg) = msg {
-            get_message(addr, &peer_map, &msg);
+                if let Err(e) = game.connect(addr, ws_stream).await {
+                    dbg!(e);
+                }
+            }
+            _ => (),
         }
+    }
 
-        future::ok(())
-    });
-
-    let receive_from_others = rx.map(Ok).forward(outgoing);
-
-    pin_mut!(broadcast_incoming, receive_from_others);
-    future::select(broadcast_incoming, receive_from_others).await;
-
-    println!("{} disconnected", &addr);
-    peer_map.lock().unwrap().remove(&addr);
+    println!("Handle connection closing {}", addr);
 }
 
 #[tokio::main]
@@ -68,7 +55,9 @@ async fn main() -> Result<(), IoError> {
         .nth(1)
         .unwrap_or_else(|| "0.0.0.0:3012".to_string());
 
-    let state = Arc::<PeerMap>::new(Mutex::new(HashMap::new()));
+    let state = Arc::new(Mutex::new(State {
+        games: HashMap::new(),
+    }));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;

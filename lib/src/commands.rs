@@ -9,7 +9,6 @@ pub enum Action {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Command {
-    Action(Action),
     Connect(String),
 }
 

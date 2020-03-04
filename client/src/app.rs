@@ -85,10 +85,7 @@ impl Component for App {
             }
             Msg::PlayCard(card) => {
                 if let Some(ref mut task) = self.ws {
-                    task.send(Ok(serde_json::to_string(&Command::Action(
-                        Action::PlayCard(card),
-                    ))
-                    .unwrap()));
+                    task.send(Ok(serde_json::to_string(&Action::PlayCard(card)).unwrap()));
                 }
                 false
             }
