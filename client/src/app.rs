@@ -5,7 +5,7 @@ use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
 
-use pinochle_lib::{Action, Card, Command, PlayerData, Response};
+use pinochle_lib::{is_legal, Action, Card, Command, PlayerData, Response};
 
 enum State {
     Playing(PlayerData),
@@ -125,10 +125,29 @@ impl Component for App {
             },
 
             State::Playing(data) => {
+                let is_current = data.player == data.turn;
+
+                let hand = data.hand.iter().map(|c| {
+                    if is_current {
+                        (
+                            c,
+                            match is_legal(&data.play_area, &data.hand, c, data.trump) {
+                                Err(_) => false,
+                                Ok(_) => true,
+                            },
+                        )
+                    } else {
+                        (c, false)
+                    }
+                });
+
                 html! {
-                    <div>
-                        <div> { "Position: " } { data.player } </div>
-                        <div id="hand">{ for data.hand.iter().map(|c| to_html(&self.link, c)) }</div>
+                    <div class={ if is_current { "active-player" } else { "" } } >
+                        <div>
+                            { "Position: " } { data.player }
+                            { " Current Player: " } { data.turn }
+                        </div>
+                        <div id="hand">{ for hand.map(|(c, playable)| to_html_playable(&self.link, c, playable)) }</div>
                         <div id="play-area">{ for data.play_area.iter().map(|c| to_html(&self.link, c)) }</div>
                     </div>
                 }
@@ -137,12 +156,19 @@ impl Component for App {
     }
 }
 
-fn to_html(link: &ComponentLink<App>, card: &Card) -> Html {
+fn to_html_playable(link: &ComponentLink<App>, card: &Card, playable: bool) -> Html {
     let card = card.clone();
+
+    let playable = if playable { " playable" } else { "" };
+
     html! {
-        <div class={ format!("suit-{} card", card.suit) }
+        <div class={ format!("suit-{} card{}", card.suit, playable) }
              onclick=link.callback(move |e| Msg::PlayCard(card)) >
         { card.to_string() }
         </div>
     }
+}
+
+fn to_html(link: &ComponentLink<App>, card: &Card) -> Html {
+    to_html_playable(link, card, false)
 }
