@@ -112,6 +112,10 @@ impl Board {
             self.play_area.clear();
 
             self.turn = winner;
+
+            if self.hands[0].len() == 0 {
+                return Ok(BoardState::Finished);
+            }
         }
 
         Ok(BoardState::Playing)
