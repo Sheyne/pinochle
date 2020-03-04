@@ -105,6 +105,8 @@ impl Board {
 
             self.taken[winning_team].extend(self.play_area.iter());
             self.play_area.clear();
+
+            self.turn = winner;
         }
 
         Ok(())
