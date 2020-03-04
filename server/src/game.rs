@@ -44,12 +44,17 @@ impl Game {
     }
 
     fn do_action(&self, index: usize, action: &Action) -> Result<(), ResponseError> {
-        if self.board.read().unwrap().turn != index {
-            return Err(ResponseError::NotYourTurn);
-        }
-
         if let Err(e) = match action {
-            Action::PlayCard(c) => self.board.write().unwrap().play(*c),
+            Action::PlayCard(c) => {
+                if self.board.read().unwrap().turn != index {
+                    return Err(ResponseError::NotYourTurn);
+                }
+                self.board.write().unwrap().play(*c)
+            }
+            Action::Reset => {
+                *self.board.write().unwrap() = Board::shuffle();
+                Ok(())
+            }
         } {
             return Err(ResponseError::GameError(e.to_string()));
         }

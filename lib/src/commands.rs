@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Action {
     PlayCard(Card),
+    Reset,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Command {
     Connect(String),
+    Action(Action),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
