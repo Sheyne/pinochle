@@ -1,176 +1,84 @@
-/*--------------------------------------------------------------------------------------------------------------
- * Copyright (c) Sheyne Anderson. All rights reserved.
- * Licensed under the MIT License.
- *-------------------------------------------------------------------------------------------------------------*/
+use std::{
+    collections::HashMap,
+    env,
+    io::Error as IoError,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
-use pinochle_lib::{Action, Board, Command, Response, ResponseError};
-use serde_json::{from_str, to_string};
-use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex, RwLock, Weak};
-use std::thread::spawn;
-use tungstenite::{protocol::WebSocket, server::accept, Message};
-use weak_table::PtrWeakKeyHashMap;
+use futures::channel::mpsc::{unbounded, UnboundedSender};
+use futures_util::{future, pin_mut, stream::TryStreamExt, StreamExt};
 
-struct Game {
-    board: Board,
-    positions: HashMap<String, usize>,
-}
+use tokio::net::{TcpListener, TcpStream};
+use tungstenite::protocol::Message;
 
-impl Game {
-    fn new() -> Game {
-        Game {
-            board: Board::shuffle(),
-            positions: HashMap::new(),
-        }
-    }
+type Tx = UnboundedSender<Message>;
+type PeerMap = Mutex<HashMap<SocketAddr, Tx>>;
 
-    fn play(&mut self, player: usize, action: Action) -> Result<(), ResponseError> {
-        if self.board.turn != player {
-            return Result::Err(ResponseError::NotYourTurn);
-        }
+fn get_message(addr: SocketAddr, peer_map: &PeerMap, msg: &str) {
+    println!("Msg: {}", msg);
 
-        match action {
-            Action::PlayCard(card) => match self.board.play(card) {
-                Ok(_) => (),
-                Err(e) => return Result::Err(ResponseError::GameError(e.to_string())),
-            },
-        }
+    let peers = peer_map.lock().unwrap();
 
-        Ok(())
-    }
+    // We want to broadcast the message to everyone except ourselves.
+    let broadcast_recipients = peers
+        .iter()
+        // .filter(|(peer_addr, _)| peer_addr != &&addr)
+        .map(|(_, ws_sink)| ws_sink);
 
-    fn run(&mut self, player: &str, action: Action) -> Result<(), ResponseError> {
-        match self.positions.get(player) {
-            Some(p) => {
-                let p = *p;
-                self.play(p, action)
-            }
-            None => Result::Err(ResponseError::NotPlaying),
-        }
+    for recp in broadcast_recipients {
+        recp.unbounded_send(Message::Text(msg.to_owned())).unwrap();
     }
 }
 
-struct GameServer {
-    sockets: RwLock<PtrWeakKeyHashMap<Weak<Mutex<WebSocket<TcpStream>>>, String>>,
-    game: RwLock<Game>,
+async fn handle_connection(peer_map: Arc<PeerMap>, raw_stream: TcpStream, addr: SocketAddr) {
+    println!("Incoming TCP connection from: {}", addr);
+
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+        .await
+        .expect("Error during the websocket handshake occurred");
+    println!("WebSocket connection established: {}", addr);
+
+    // Insert the write part of this peer to the peer map.
+    let (tx, rx) = unbounded();
+    peer_map.lock().unwrap().insert(addr, tx);
+
+    let (outgoing, incoming) = ws_stream.split();
+
+    let broadcast_incoming = incoming.try_for_each(|msg| {
+        if let Message::Text(msg) = msg {
+            get_message(addr, &peer_map, &msg);
+        }
+
+        future::ok(())
+    });
+
+    let receive_from_others = rx.map(Ok).forward(outgoing);
+
+    pin_mut!(broadcast_incoming, receive_from_others);
+    future::select(broadcast_incoming, receive_from_others).await;
+
+    println!("{} disconnected", &addr);
+    peer_map.lock().unwrap().remove(&addr);
 }
 
-impl GameServer {
-    fn send(
-        &self,
-        socket: Arc<Mutex<WebSocket<TcpStream>>>,
-        command: Command,
-    ) -> Result<(), tungstenite::error::Error> {
-        match command {
-            Command::Connect(id) => {
-                let game = &mut self.game.write().unwrap();
-                let positions = &mut game.positions;
+#[tokio::main]
+async fn main() -> Result<(), IoError> {
+    let addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "0.0.0.0:3012".to_string());
 
-                dbg!(&positions);
+    let state = Arc::<PeerMap>::new(Mutex::new(HashMap::new()));
 
-                let position = match positions.get(&id) {
-                    Some(p) => Some(*p),
-                    None => {
-                        let candidate = positions.len();
-                        if candidate < 4 {
-                            positions.insert(id.clone(), candidate);
-                            Some(candidate)
-                        } else {
-                            None
-                        }
-                    }
-                };
+    // Create the event loop and TCP listener we'll accept connections on.
+    let try_socket = TcpListener::bind(&addr).await;
+    let mut listener = try_socket.expect("Failed to bind");
+    println!("Listening on: {}", addr);
 
-                dbg!(&position);
-
-                if let Some(position) = position {
-                    let player = game.board.get(position);
-
-                    let result = socket.lock().unwrap().write_message(Message::Text(
-                        to_string(&Response::Update(player)).unwrap(),
-                    ));
-
-                    self.sockets.write().unwrap().insert(socket, id);
-
-                    result
-                } else {
-                    socket.lock().unwrap().write_message(Message::Text(
-                        to_string(&Response::Error(ResponseError::NotPlaying)).unwrap(),
-                    ))
-                }
-            }
-            Command::Action(a) => {
-                let sockets = self.sockets.read().unwrap();
-                let id = sockets.get(&socket);
-
-                let response = match id {
-                    Some(id) => self.game.write().unwrap().run(id, a),
-                    None => Result::Err(ResponseError::NotConnected),
-                };
-
-                match response {
-                    Result::Err(err) => socket
-                        .lock()
-                        .unwrap()
-                        .write_message(Message::Text(to_string(&Response::Error(err)).unwrap())),
-                    Result::Ok(_) => {
-                        let game = &self.game.read().unwrap();
-
-                        for (socket, id) in self.sockets.read().unwrap().iter() {
-                            if let Some(position) = game.positions.get(id) {
-                                println!("Updating {} (position = {})", id, position);
-                                let mut socket = socket.lock().unwrap();
-                                socket.write_message(Message::Text(
-                                    to_string(&Response::Update(game.board.get(*position)))
-                                        .unwrap(),
-                                ))?;
-                            }
-                        }
-
-                        Ok(())
-                    }
-                }
-            }
-        }
+    // Let's spawn the handling of each connection in a separate task.
+    while let Ok((stream, addr)) = listener.accept().await {
+        tokio::spawn(handle_connection(state.clone(), stream, addr));
     }
 
-    fn new() -> GameServer {
-        GameServer {
-            sockets: RwLock::new(PtrWeakKeyHashMap::new()),
-            game: RwLock::new(Game::new()),
-        }
-    }
-}
-
-fn main() {
-    let game_server = Arc::new(GameServer::new());
-
-    // A WebSocket echo server
-    let server = TcpListener::bind("0.0.0.0:3012").unwrap();
-    for stream in server.incoming() {
-        let game_server = game_server.clone();
-        spawn(move || {
-            let websocket = Arc::new(Mutex::new(accept(stream.unwrap()).unwrap()));
-            loop {
-                let msg = websocket.lock().unwrap().read_message();
-
-                match msg {
-                    Ok(msg) => {
-                        if let Message::Text(s) = msg {
-                            if let Err(err) =
-                                game_server.send(websocket.clone(), from_str(&s).unwrap())
-                            {
-                                println!("Error: {}", err);
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        println!("Error: {}", err);
-                        break;
-                    }
-                }
-            }
-        });
-    }
+    Ok(())
 }
