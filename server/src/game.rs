@@ -30,6 +30,7 @@ impl From<TrySendError<Message>> for GameError {
 
 pub struct Game {
     peer_map: PeerMap,
+    players: RwLock<HashMap<SocketAddr, usize>>,
     board: RwLock<Board>,
 }
 
@@ -37,26 +38,51 @@ impl Game {
     pub fn new() -> Self {
         Game {
             board: RwLock::new(Board::shuffle()),
+            players: RwLock::new(HashMap::new()),
             peer_map: RwLock::new(HashMap::new()),
         }
     }
 
-    fn receive_action(&self, addr: SocketAddr, action: Action) -> Result<(), GameError> {
-        println!("Msg: {:?}", action);
-
-        let peers = self.peer_map.read().unwrap();
-
-        // We want to broadcast the message to everyone except ourselves.
-        let broadcast_recipients = peers
-            .iter()
-            // .filter(|(peer_addr, _)| peer_addr != &&addr)
-            .map(|(_, ws_sink)| ws_sink);
-
-        for recp in broadcast_recipients {
-            let msg = "";
-            recp.unbounded_send(Message::Text(msg.to_owned()))?;
+    fn do_action(&self, index: usize, action: &Action) -> Result<(), ResponseError> {
+        if self.board.read().unwrap().turn != index {
+            return Err(ResponseError::NotYourTurn);
         }
 
+        if let Err(e) = match action {
+            Action::PlayCard(c) => self.board.write().unwrap().play(*c),
+        } {
+            return Err(ResponseError::GameError(e.to_string()));
+        }
+
+        Ok(())
+    }
+
+    fn receive_action(&self, addr: SocketAddr, action: &Action) -> Result<(), GameError> {
+        println!("Msg: {:?}", action);
+
+        let index = self.players.read().unwrap().get(&addr).map(|x| *x);
+
+        if let Some(index) = index {
+            match self.do_action(index, action) {
+                Ok(_) => {
+                    let peers = self.peer_map.read().unwrap();
+
+                    for (key, recp) in peers.iter() {
+                        let index = self.players.read().unwrap().get(key).map(|x| *x);
+                        if let Some(index) = index {
+                            let state = self.board.read().unwrap().get(index);
+                            dbg!(&state);
+                            recp.unbounded_send(Self::message(&Response::Update(state)))?;
+                        }
+                    }
+                }
+                Err(e) => {
+                    if let Some(recp) = self.peer_map.read().unwrap().get(&addr) {
+                        recp.unbounded_send(Self::message(&Response::Error(e)))?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -69,9 +95,15 @@ impl Game {
         addr: SocketAddr,
         mut ws_stream: WebSocketStream<TcpStream>,
     ) -> Result<(), GameError> {
-        ws_stream
-            .send(Game::message(&Response::Error(ResponseError::NotConnected)))
-            .await?;
+        let player_index = {
+            let mut players = self.players.write().unwrap();
+            let player_index = players.len();
+            players.insert(addr, player_index);
+            player_index
+        };
+
+        let initial_message = Response::Update(self.board.read().unwrap().get(player_index));
+        ws_stream.send(Self::message(&initial_message)).await?;
 
         // Insert the write part of this peer to the peer map.
         let (tx, rx) = unbounded();
@@ -84,7 +116,7 @@ impl Game {
         let broadcast_incoming = incoming.try_for_each(|msg| {
             if let Message::Text(msg) = msg {
                 if let Ok(action) = from_str(&msg) {
-                    if let Err(e) = self.receive_action(addr, action) {
+                    if let Err(e) = self.receive_action(addr, &action) {
                         dbg!(e);
                     }
                 }
@@ -100,6 +132,7 @@ impl Game {
 
         println!("{} disconnected", &addr);
         self.peer_map.write().unwrap().remove(&addr);
+        self.players.write().unwrap().remove(&addr);
 
         Ok(())
     }
