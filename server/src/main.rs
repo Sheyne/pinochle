@@ -11,11 +11,11 @@ use std::{
 use tokio::net::{TcpListener, TcpStream};
 use tungstenite::protocol::Message;
 
-mod game;
-use game::Game;
+mod table;
+use table::Table;
 
 struct State {
-    games: HashMap<String, Arc<Game>>,
+    games: HashMap<String, Arc<Table>>,
 }
 
 async fn handle_connection(state: Arc<Mutex<State>>, raw_stream: TcpStream, addr: SocketAddr) {
@@ -35,7 +35,7 @@ async fn handle_connection(state: Arc<Mutex<State>>, raw_stream: TcpStream, addr
                     .unwrap()
                     .games
                     .entry(room)
-                    .or_insert(Arc::new(Game::new()))
+                    .or_insert(Arc::new(Table::new()))
                     .clone();
 
                 if let Err(e) = game.connect(addr, ws_stream).await {

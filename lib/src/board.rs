@@ -21,6 +21,11 @@ pub struct PlayerData {
     pub trump: Suit,
 }
 
+pub enum BoardState {
+    Playing,
+    Finished,
+}
+
 pub struct Board {
     pub hands: [Vec<Card>; NUMBER_OF_PLAYERS],
     pub play_area: Vec<Card>,
@@ -75,7 +80,7 @@ impl Board {
         }
     }
 
-    pub fn play(&mut self, card: Card) -> Result<(), &'static str> {
+    pub fn play(&mut self, card: Card) -> Result<BoardState, &'static str> {
         let hand = &mut self.hands[self.turn];
 
         is_legal(&self.play_area, &hand, &card, self.trump)?;
@@ -109,7 +114,7 @@ impl Board {
             self.turn = winner;
         }
 
-        Ok(())
+        Ok(BoardState::Playing)
     }
 }
 
