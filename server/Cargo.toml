@@ -12,7 +12,7 @@ futures-sink = "0.3"
 serde = "1.0"
 serde_json = "1.0"
 strum = "0.1"
-tungstenite = "0.10"
+tungstenite = { version = "0.10", default-features = false }
 tokio-tungstenite = "0.10"
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
 weak-table = "0.2"

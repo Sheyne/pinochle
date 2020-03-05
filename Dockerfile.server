@@ -1,0 +1,17 @@
+#-------------------------------------------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License. See https://go.microsoft.com/fwlink/?linkid=2090316 for license information.
+#-------------------------------------------------------------------------------------------------------------
+
+FROM rust:latest AS builder
+RUN apt-get update
+RUN apt-get install musl-tools -y
+RUN rustup target add x86_64-unknown-linux-musl
+ADD lib/ lib/
+ADD server/ server/
+RUN cd server && RUSTFLAGS=-Clinker=musl-gcc cargo build --release --bin pinochle-server --target=x86_64-unknown-linux-musl
+
+
+FROM alpine:latest
+COPY --from=builder /server/target/x86_64-unknown-linux-musl/release/pinochle-server /pinochle-server
+CMD ["/pinochle-server"]
