@@ -1,4 +1,8 @@
 use anyhow::Error;
+use std::string::ToString;
+use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter};
+use yew::components::Select;
 use yew::events::InputData;
 use yew::format::Json;
 use yew::prelude::*;
@@ -7,6 +11,14 @@ use yew::services::ConsoleService;
 
 use pinochle_lib::{is_legal, Action, Card, Command, PlayerData, Response};
 
+#[derive(Display, PartialEq, Clone, EnumIter, Copy)]
+pub enum Server {
+    #[strum(serialize = "ws://localhost:3011/")]
+    Localhost,
+    #[strum(serialize = "wss://pinochle.herokuapp.com/")]
+    Heroku,
+}
+
 enum State {
     Playing(PlayerData),
     Ready,
@@ -14,7 +26,8 @@ enum State {
 
 pub struct App {
     console: ConsoleService,
-    name: String,
+    table: String,
+    server: Server,
     ws: Option<WebSocketTask>,
     wss: WebSocketService,
     link: ComponentLink<App>,
@@ -28,7 +41,8 @@ pub enum Msg {
     Connected,
     PlayCard(Card),
     Received(Result<Response, Error>),
-    EnterName(String),
+    SelectTable(String),
+    SelectServer(Server),
 }
 
 impl Component for App {
@@ -37,7 +51,8 @@ impl Component for App {
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         App {
-            name: "".to_string(),
+            table: "".to_string(),
+            server: Server::Localhost,
             state: State::Ready,
             ws: None,
             wss: WebSocketService::new(),
@@ -55,7 +70,9 @@ impl Component for App {
                     WebSocketStatus::Opened => Msg::Connected,
                 });
                 if self.ws.is_none() {
-                    let task = self.wss.connect_text("ws://localhost:3012/", cbout, cbnot);
+                    let task = self
+                        .wss
+                        .connect_text(&self.server.to_string(), cbout, cbnot);
 
                     match task {
                         Ok(t) => self.ws = Some(t),
@@ -67,7 +84,7 @@ impl Component for App {
             Msg::Connected => {
                 match &mut self.ws {
                     Some(task) => {
-                        match serde_json::to_string(&Command::Connect(self.name.to_string())) {
+                        match serde_json::to_string(&Command::Connect(self.table.to_string())) {
                             Ok(a) => {
                                 self.console.log(&format!("sending {}", a));
                                 task.send(Ok(a));
@@ -105,8 +122,13 @@ impl Component for App {
                     .log(&format!("Error when reading data from server: {}", &s));
                 false
             }
-            Msg::EnterName(x) => {
-                self.name = x;
+            Msg::SelectTable(x) => {
+                self.table = x;
+                false
+            }
+            Msg::SelectServer(x) => {
+                self.server = x;
+                self.console.log(&format!("Server: {}", self.server));
                 false
             }
         }
@@ -114,15 +136,20 @@ impl Component for App {
 
     fn view(&self) -> Html {
         match &self.state {
-            State::Ready => html! {
-                <div>
-                    <input
-                        type="text"
-                        value={&self.name}
-                        oninput=self.link.callback(|e: InputData| Msg::EnterName(e.value)) />
-                    <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
-                </div>
-            },
+            State::Ready => {
+                let servers: Vec<Server> = Server::iter().collect();
+                html! {
+                    <div>
+                    <Select<Server> options=servers selected=self.server onchange=self.link.callback(|e: Server| Msg::SelectServer(e)) />
+
+                        <input
+                            type="text"
+                            value={&self.table}
+                            oninput=self.link.callback(|e: InputData| Msg::SelectTable(e.value)) />
+                        <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
+                    </div>
+                }
+            }
 
             State::Playing(data) => {
                 let is_current = data.player == data.turn;

@@ -3,7 +3,6 @@ use pinochle_lib::Command;
 use serde_json::from_str;
 use std::{
     collections::HashMap,
-    env,
     io::Error as IoError,
     net::SocketAddr,
     sync::{Arc, Mutex},
@@ -51,9 +50,10 @@ async fn handle_connection(state: Arc<Mutex<State>>, raw_stream: TcpStream, addr
 
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
-    let addr = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "0.0.0.0:3012".to_string());
+    let addr = match std::env::var("PORT") {
+        Ok(val) => format!("0.0.0.0:{}", val),
+        Err(_) => format!("0.0.0.0:{}", 3011),
+    };
 
     let state = Arc::new(Mutex::new(State {
         games: HashMap::new(),
