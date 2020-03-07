@@ -5,15 +5,6 @@ authors = ["Sheyne Anderson <sheyne@sheyne.com>"]
 edition = "2018"
 
 [dependencies]
-itertools = "0.8.2"
-pinochle-lib = { path = "../lib" }
-futures-util = "0.3"
-futures-sink = "0.3"
-serde = "1.0"
-serde_json = "1.0"
-strum = "0.17"
-tungstenite = { version = "0.10", default-features = false }
+server-logic = { path = "../server-logic" }
 tokio-tungstenite = "0.10"
 tokio = { version = "0.2", features = ["rt-threaded", "macros"] }
-weak-table = "0.2"
-futures = "0.3"

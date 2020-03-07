@@ -7,19 +7,10 @@ pub mod states;
 
 use self::core::*;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PlayerData {
-    pub player: usize,
-    pub hand: Vec<Card>,
-    pub play_area: Vec<Card>,
-    pub weve_taken: usize,
-    pub theyve_taken: usize,
-    pub turn: usize,
-    pub trump: Suit,
-}
-
 #[derive(Deserialize, Serialize, Debug)]
-pub enum Action {}
+pub enum Action {
+    Resign,
+}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub enum Message<T> {
@@ -40,7 +31,7 @@ pub use Game::*;
 impl Game {
     pub fn new(
         first_player: Player,
-        hands: [Vec<Card>; states::NUMBER_OF_PLAYERS],
+        hands: [Vec<Card>; NUMBER_OF_PLAYERS],
     ) -> states::Bidding {
         states::Game::new(first_player, states::hands_to_option(hands))
     }

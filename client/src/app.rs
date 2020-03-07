@@ -11,7 +11,7 @@ use yew::services::ConsoleService;
 
 use pinochle_lib::{
     states::is_legal, Card, Command, Game, Message as GameMessage, Player, Playing,
-    PlayingInput::Play, Response,
+    PlayingInput::Play,
 };
 
 #[derive(Display, PartialEq, Clone, EnumIter, Copy)]
@@ -24,6 +24,7 @@ pub enum Server {
 
 enum State {
     InGame(Player, Game),
+    WaitingForGame,
     Ready,
 }
 
@@ -43,7 +44,7 @@ pub enum Msg {
     Disconnected,
     Connected,
     PlayCard(Card),
-    Received(Result<Response, Error>),
+    Received(String),
     SelectTable(String),
     SelectServer(Server),
 }

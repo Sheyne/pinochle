@@ -1,14 +1,6 @@
 use super::core::*;
 use either::Either;
-use itertools::{chain, iproduct};
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use std::cmp::Ordering;
-use strum::IntoEnumIterator;
-
-pub const NUMBER_OF_TEAMS: usize = 2;
-pub const PLAYERS_PER_TEAM: usize = 2;
-pub const NUMBER_OF_PLAYERS: usize = NUMBER_OF_TEAMS * PLAYERS_PER_TEAM;
 
 pub struct BiddingState;
 pub struct SelectingTrumpState(Player);
@@ -46,7 +38,7 @@ impl<T> Game<T> {
     fn hand_mut(&mut self, p: Player) -> &mut Vec<Option<Card>> {
         &mut self.hands[p as usize]
     }
-    
+
     pub fn score(&self, team: Team) -> usize {
         self.scores[team as usize]
     }
@@ -54,7 +46,7 @@ impl<T> Game<T> {
     fn score_mut(&mut self, team: Team) -> &mut usize {
         &mut self.scores[team as usize]
     }
-    
+
     pub fn bids(&self) -> &[usize] {
         &self.bids
     }
@@ -64,29 +56,6 @@ impl<T> Game<T> {
     pub fn initial_bidder(&self) -> Player {
         self.initial_bidder
     }
-}
-
-pub fn shuffle() -> [Vec<Card>; NUMBER_OF_PLAYERS] {
-    let mut cards: Vec<Card> = chain(
-        iproduct!(Suit::iter(), Rank::iter()),
-        iproduct!(Suit::iter(), Rank::iter()),
-    )
-    .map(|(s, r)| Card { suit: s, rank: r })
-    .collect();
-
-    let mut rng = thread_rng();
-    cards.as_mut_slice().shuffle(&mut rng);
-    let cards = cards;
-
-    let cards_each: usize = cards.len() / NUMBER_OF_PLAYERS;
-    let mut iter = cards.chunks(cards_each);
-
-    [
-        iter.next().unwrap().to_vec(),
-        iter.next().unwrap().to_vec(),
-        iter.next().unwrap().to_vec(),
-        iter.next().unwrap().to_vec(),
-    ]
 }
 
 impl Bidding {

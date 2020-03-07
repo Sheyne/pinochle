@@ -1,51 +1,14 @@
-use futures_util::StreamExt;
-use pinochle_lib::Command;
-use serde_json::from_str;
-use std::{
-    collections::HashMap,
-    io::Error as IoError,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-};
+use server_logic::{State, get_connection};
+use std::{io::Error as IoError, collections::HashMap, net::SocketAddr, sync::{Arc, RwLock}};
 use tokio::net::{TcpListener, TcpStream};
-use tungstenite::protocol::Message;
 
-mod table;
-use table::Table;
-
-struct State {
-    games: HashMap<String, Arc<Table>>,
-}
-
-async fn handle_connection(state: Arc<Mutex<State>>, raw_stream: TcpStream, addr: SocketAddr) {
-    println!("Incoming TCP connection from: {}", addr);
-
-    let mut ws_stream = tokio_tungstenite::accept_async(raw_stream)
+async fn handle_connection(state: Arc<State>, raw_stream: TcpStream, addr: SocketAddr) {
+    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
         .await
         .expect("Error during the websocket handshake occurred");
     println!("WebSocket connection established: {}", addr);
 
-    let message = ws_stream.next().await;
-    if let Some(Ok(Message::Text(text))) = message {
-        match from_str(&text) {
-            Ok(Command::Connect(room)) => {
-                let game = state
-                    .lock()
-                    .unwrap()
-                    .games
-                    .entry(room)
-                    .or_insert(Arc::new(Table::new()))
-                    .clone();
-
-                if let Err(e) = game.connect(addr, ws_stream).await {
-                    dbg!(e);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    println!("Handle connection closing {}", addr);
+    get_connection(&state, addr, ws_stream).await;
 }
 
 #[tokio::main]
@@ -55,9 +18,7 @@ async fn main() -> Result<(), IoError> {
         Err(_) => format!("0.0.0.0:{}", 3011),
     };
 
-    let state = Arc::new(Mutex::new(State {
-        games: HashMap::new(),
-    }));
+    let state = Arc::new(RwLock::new(HashMap::new()));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;

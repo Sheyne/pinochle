@@ -1,4 +1,4 @@
-pub use self::{commands::*, game::core::*, game::*};
+pub use self::{command::*, game::core::*, game::*};
 
-mod commands;
 mod game;
+mod command;
