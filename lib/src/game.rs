@@ -18,6 +18,7 @@ pub enum Message<T> {
     Play(T),
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Game {
     Bidding(states::Bidding),
     SelectingTrump(states::SelectingTrump),

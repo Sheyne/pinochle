@@ -14,5 +14,15 @@ pub enum TableCommand {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TableState {
-    players: PlayerMap<bool>,
+    pub ready: PlayerMap<bool>,
+    pub player: Player,
+}
+
+impl TableState {
+    pub fn new(player: Player) -> TableState {
+        TableState {
+            ready: PlayerMap::new(),
+            player: player,
+        }
+    }
 }

@@ -189,6 +189,10 @@ impl<T> PlayerMap<T> {
                 )
             })
     }
+
+    pub fn iter_all<'a>(&'a self) -> impl Iterator<Item = (Player, &'a Option<T>)> {
+        Player::A.zip(&self.values)
+    }
 }
 
 impl<T> PlayerMap<T>

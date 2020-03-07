@@ -1,18 +1,28 @@
 use super::core::*;
 use either::Either;
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct BiddingState;
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SelectingTrumpState(Player);
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PlayingState {
     pub play_area: Vec<Card>,
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FinishedRoundState {
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FinishedState;
 
 pub type Bidding = Game<BiddingState>;
@@ -21,6 +31,7 @@ pub type Playing = Game<PlayingState>;
 pub type FinishedRound = Game<FinishedRoundState>;
 pub type Finished = Game<FinishedState>;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Game<T> {
     hands: [Vec<Option<Card>>; NUMBER_OF_PLAYERS],
     scores: [usize; NUMBER_OF_TEAMS],

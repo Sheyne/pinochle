@@ -56,9 +56,22 @@ where
         }
     }
 
-    pub fn send_to<F>(&self, key: &Key, msg: Message) {
+    pub fn send_to(&self, key: &Key, msg: Message) {
         if let Some(stream) = self.senders.read().unwrap().get(key) {
             stream.unbounded_send(msg.clone()).unwrap();
+        }
+    }
+
+    pub fn send<F>(&self, mut message: F)
+    where
+        F: FnMut(&Key) -> Option<Message>,
+    {
+        let peers = self.senders.read().unwrap();
+
+        for (key, recp) in peers.iter() {
+            if let Some(msg) = message(key) {
+                recp.unbounded_send(msg).unwrap();
+            }
         }
     }
 
