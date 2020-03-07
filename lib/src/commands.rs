@@ -1,4 +1,4 @@
-use super::core::*;
+use super::game::core::*;
 use super::game::*;
 use serde::{Deserialize, Serialize};
 

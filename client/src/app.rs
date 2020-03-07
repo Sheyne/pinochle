@@ -9,7 +9,10 @@ use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
 
-use pinochle_lib::{is_legal, Action, Card, Command, PlayerData, Response};
+use pinochle_lib::{
+    states::is_legal, Card, Command, Game, Message as GameMessage, Player, Playing,
+    PlayingInput::Play, Response,
+};
 
 #[derive(Display, PartialEq, Clone, EnumIter, Copy)]
 pub enum Server {
@@ -20,7 +23,7 @@ pub enum Server {
 }
 
 enum State {
-    Playing(PlayerData),
+    InGame(Player, Game),
     Ready,
 }
 
@@ -102,19 +105,21 @@ impl Component for App {
             }
             Msg::PlayCard(card) => {
                 if let Some(ref mut task) = self.ws {
-                    task.send(Ok(serde_json::to_string(&Action::PlayCard(card)).unwrap()));
+                    task.send(Ok(
+                        serde_json::to_string(&GameMessage::Play(Play(card))).unwrap()
+                    ));
                 }
                 false
             }
             Msg::Received(Ok(response)) => {
-                match response {
-                    Response::Update(data) => {
-                        self.state = State::Playing(data);
-                    }
-                    Response::Error(e) => {
-                        self.console.log(&format!("Error: {:?}", &e));
-                    }
-                }
+                // match response {
+                //     Response::Update(data) => {
+                //         self.state = State::Playing(data);
+                //     }
+                //     Response::Error(e) => {
+                //         self.console.log(&format!("Error: {:?}", &e));
+                //     }
+                // }
                 true
             }
             Msg::Received(Err(s)) => {
@@ -151,51 +156,58 @@ impl Component for App {
                 }
             }
 
-            State::Playing(data) => {
-                let is_current = data.player == data.turn;
+            State::InGame(player, data) => {
+                let is_current = *player == data.turn();
 
-                let hand = data.hand.iter().map(|c| {
-                    if is_current {
-                        (
-                            c,
-                            match is_legal(&data.play_area, &data.hand, c, data.trump) {
-                                Err(_) => false,
-                                Ok(_) => true,
-                            },
-                        )
-                    } else {
-                        (c, false)
+                match data {
+                    Playing(state) => {
+                        let hand = state.hand(*player);
+                        let legality = hand.iter().map(|c| {
+                            is_current
+                                && c.map_or(false, |c| {
+                                    is_legal(&state.play_area(), hand, &c, state.trump()).is_ok()
+                                })
+                        });
+
+                        html! {
+                            <div class={ if is_current { "active-player" } else { "" } } >
+                                <div>
+                                    { "Position: " } { format!("{:?}", player) }
+                                    { " Current Player: " } { format!("{:?}", state.turn()) }
+                                </div>
+                                <div id="hand">{ for hand.iter().zip(legality).map(|(c, playable)| to_html_playable(&self.link, *c, playable)) }</div>
+                                <div id="play-area">{ for state.play_area().iter().map(|c| to_html(&self.link, Some(*c))) }</div>
+                            </div>
+                        }
                     }
-                });
-
-                html! {
-                    <div class={ if is_current { "active-player" } else { "" } } >
-                        <div>
-                            { "Position: " } { data.player }
-                            { " Current Player: " } { data.turn }
-                        </div>
-                        <div id="hand">{ for hand.map(|(c, playable)| to_html_playable(&self.link, c, playable)) }</div>
-                        <div id="play-area">{ for data.play_area.iter().map(|c| to_html(&self.link, c)) }</div>
-                    </div>
+                    _ => html! {},
                 }
             }
         }
     }
 }
 
-fn to_html_playable(link: &ComponentLink<App>, card: &Card, playable: bool) -> Html {
+fn to_html_playable(link: &ComponentLink<App>, card: Option<Card>, playable: bool) -> Html {
     let card = card.clone();
 
-    let playable = if playable { " playable" } else { "" };
-
-    html! {
-        <div class={ format!("suit-{} card{}", card.suit, playable) }
-             onclick=link.callback(move |e| Msg::PlayCard(card)) >
-        { card.to_string() }
-        </div>
+    match card {
+        Some(card) => {
+            let playable = if playable { " playable" } else { "" };
+            html! {
+                <div class={ format!("suit-{} card{}", card.suit, playable) }
+                    onclick=link.callback(move |e| Msg::PlayCard(card)) >
+                { card.to_string() }
+                </div>
+            }
+        }
+        None => html! {
+            <div class={ "card" }>
+            { "U" }
+            </div>
+        },
     }
 }
 
-fn to_html(link: &ComponentLink<App>, card: &Card) -> Html {
+fn to_html(link: &ComponentLink<App>, card: Option<Card>) -> Html {
     to_html_playable(link, card, false)
 }
