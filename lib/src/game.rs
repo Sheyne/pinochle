@@ -29,10 +29,7 @@ pub enum Game {
 pub use Game::*;
 
 impl Game {
-    pub fn new(
-        first_player: Player,
-        hands: [Vec<Card>; NUMBER_OF_PLAYERS],
-    ) -> states::Bidding {
+    pub fn new(first_player: Player, hands: [Vec<Card>; NUMBER_OF_PLAYERS]) -> states::Bidding {
         states::Game::new(first_player, states::hands_to_option(hands))
     }
 

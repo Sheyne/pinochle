@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumIter, EnumString};
 use itertools::{chain, iproduct};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter, EnumString};
 
 pub const NUMBER_OF_TEAMS: usize = 2;
 pub const PLAYERS_PER_TEAM: usize = 2;
@@ -121,13 +121,13 @@ impl Iterator for Player {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Team {
     Red = 0,
     Blue = 1,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Player {
     A = 0,
     B = 1,
@@ -152,6 +152,59 @@ impl Player {
             Player::C => Player::D,
             Player::D => Player::A,
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlayerMap<T> {
+    values: [Option<T>; NUMBER_OF_PLAYERS],
+}
+
+impl<T> PlayerMap<T> {
+    pub fn new() -> PlayerMap<T> {
+        PlayerMap {
+            values: [None, None, None, None],
+        }
+    }
+
+    pub fn get_value(&self, p: Player) -> &Option<T> {
+        &self.values[p as usize]
+    }
+
+    pub fn get_value_mut(&mut self, p: Player) -> &mut Option<T> {
+        &mut self.values[p as usize]
+    }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Player, &'a T)> {
+        Player::A
+            .zip(&self.values)
+            .filter(|(_, v)| v.is_some())
+            .map(|(p, v)| {
+                (
+                    p,
+                    match v {
+                        Some(v) => v,
+                        None => panic!(),
+                    },
+                )
+            })
+    }
+}
+
+impl<T> PlayerMap<T>
+where
+    T: Eq,
+{
+    pub fn get_player(&self, value: &T) -> Option<Player> {
+        self.values
+            .iter()
+            .zip(Player::A)
+            .filter(|(v, _)| match v {
+                Some(v) => v == value,
+                None => false,
+            })
+            .map(|(_, p)| p)
+            .next()
     }
 }
 

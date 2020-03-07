@@ -29,7 +29,8 @@ where
                             .write()
                             .unwrap()
                             .entry(name)
-                            .or_insert_with(|| Arc::new(Table::new())).clone(),
+                            .or_insert_with(|| Arc::new(Table::new()))
+                            .clone(),
                         Some(table) => table,
                     };
 
@@ -61,9 +62,7 @@ impl Table {
 
     fn action(&self, action: Action) -> Completion {
         match action {
-            Action::Resign => {
-                Finished
-            }
+            Action::Resign => Finished,
         }
     }
 

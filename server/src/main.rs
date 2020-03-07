@@ -1,5 +1,10 @@
-use server_logic::{State, get_connection};
-use std::{io::Error as IoError, collections::HashMap, net::SocketAddr, sync::{Arc, RwLock}};
+use server_logic::{get_connection, State};
+use std::{
+    collections::HashMap,
+    io::Error as IoError,
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 use tokio::net::{TcpListener, TcpStream};
 
 async fn handle_connection(state: Arc<State>, raw_stream: TcpStream, addr: SocketAddr) {
