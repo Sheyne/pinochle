@@ -2,7 +2,11 @@ use futures::{
     sink::Sink,
     stream::{Stream, TryStreamExt},
 };
-use pinochle_lib::{shuffle, Action, Command, Game, Player, PlayerMap, TableCommand, TableState};
+use pinochle_lib::{
+    command::{Command, PlayingInput, PlayingResponse, TableCommand, TableState},
+    game::Game,
+    shuffle, Player, PlayerMap,
+};
 pub use room::*;
 use serde_json::{from_str, to_string};
 use std::collections::HashMap;
@@ -51,7 +55,7 @@ struct TableStateInternal {
 
 enum TableStates {
     Lobby(Mutex<TableStateInternal>),
-    Playing(RwLock<Option<Game>>),
+    Playing(PlayerMap<SocketAddr>, RwLock<Game>),
 }
 
 use TableStates::*;
@@ -61,24 +65,20 @@ pub struct Table {
     room: Room<SocketAddr, Message>,
 }
 
+impl TableStateInternal {
+    fn new() -> TableStateInternal {
+        TableStateInternal {
+            ready: HashMap::new(),
+            players: PlayerMap::new(),
+        }
+    }
+}
+
 impl Table {
     fn new() -> Table {
         Table {
-            state: RwLock::new(Lobby(Mutex::new(TableStateInternal {
-                ready: HashMap::new(),
-                players: PlayerMap::new(),
-            }))),
+            state: RwLock::new(Lobby(Mutex::new(TableStateInternal::new()))),
             room: Room::new(),
-        }
-    }
-
-    fn error(&self, addr: &SocketAddr, error: String) {
-        self.room.send_to(addr, Message::Text(error))
-    }
-
-    fn action(&self, action: Action) -> Completion {
-        match action {
-            Action::Resign => Finished,
         }
     }
 
@@ -131,31 +131,67 @@ impl Table {
                     let game = Game::new(Player::A, shuffle()).into();
                     self.room
                         .broadcast(Message::Text(to_string(&game).unwrap()));
-                    let s = Playing(RwLock::new(Some(game)));
+                    let s = Playing(s.players.clone(), RwLock::new(game));
 
                     (Some(s), Continue)
                 } else {
                     (None, Continue)
                 }
             }
-            Playing(game) => {
-                let mut action: Option<Action> = None;
-                let mut error: Option<String> = None;
-                {
-                    let mut game = game.write().unwrap();
-                    *game = game.take().map(|game| {
-                        let (game, a, e) = game.get_str(&message);
+            Playing(player_map, game) => {
+                if let Ok(input) = from_str(&message) {
+                    match input {
+                        PlayingInput::Resign => {
+                            (Some(Lobby(Mutex::new(TableStateInternal::new()))), Finished)
+                        }
+                        PlayingInput::Play(game_input) => {
+                            let (player, result) = {
+                                let mut game = game.write().unwrap();
+                                let player = game.turn();
 
-                        action = a;
-                        error = e;
+                                if let Some(player) = player {
+                                    if let Some(connected_player) = player_map.get_player(addr) {
+                                        if player == connected_player {
+                                            let result = game.play(game_input.clone());
+                                            (
+                                                Some(player),
+                                                result.clone().map_err(|e| e.to_string()),
+                                            )
+                                        } else {
+                                            (None, Err("Not active player".to_owned()))
+                                        }
+                                    } else {
+                                        (None, Err("Not playing".to_owned()))
+                                    }
+                                } else {
+                                    (None, Err("Game is over".to_owned()))
+                                }
+                            };
 
-                        game
-                    });
+                            match result {
+                                Ok(_) => {
+                                    let response = PlayingResponse::Played(
+                                        player.expect("Player must be non none or we'd be in Err"),
+                                        game_input,
+                                    );
+                                    let message = to_string(&response).unwrap();
+                                    let message = Message::Text(message);
+                                    self.room.broadcast(message)
+                                }
+                                Err(e) => {
+                                    let response = PlayingResponse::Error(e);
+                                    let message = to_string(&response).unwrap();
+                                    let message = Message::Text(message);
+                                    self.room.send_to(addr, message)
+                                }
+                            }
+
+                            (None, Continue)
+                        }
+                    }
+                } else {
+                    (None, Continue)
                 }
-                error.map(|e| self.error(addr, e));
-
-                let completion = action.map(|a| self.action(a)).unwrap_or(Continue);
-                (None, completion)
             }
         };
         if let Some(new_state) = new_state {

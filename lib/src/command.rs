@@ -1,5 +1,20 @@
-use super::game::core::{Player, PlayerMap};
+use super::game::{
+    core::{Player, PlayerMap},
+    Input,
+};
 use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum PlayingResponse {
+    Played(Player, Input),
+    Error(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum PlayingInput {
+    Play(Input),
+    Resign,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Command {

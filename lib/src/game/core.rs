@@ -155,7 +155,7 @@ impl Player {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerMap<T> {
     values: [Option<T>; NUMBER_OF_PLAYERS],
 }

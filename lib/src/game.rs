@@ -1,22 +1,9 @@
-use either::Either::*;
+use self::core::*;
+use either::Either;
 use serde::{Deserialize, Serialize};
-use serde_json::{from_str, to_string};
-
+pub use Game::*;
 pub mod core;
 pub mod states;
-
-use self::core::*;
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum Action {
-    Resign,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum Message<T> {
-    Action(Action),
-    Play(T),
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Game {
@@ -24,43 +11,46 @@ pub enum Game {
     SelectingTrump(states::SelectingTrump),
     Playing(states::Playing),
     FinishedRound(states::FinishedRound),
-    Finished(states::Finished),
+    Finished,
 }
-
-pub use Game::*;
 
 impl Game {
     pub fn new(first_player: Player, hands: [Vec<Card>; NUMBER_OF_PLAYERS]) -> states::Bidding {
         states::Game::new(first_player, states::hands_to_option(hands))
     }
 
-    pub fn get_str(self, s: &str) -> (Game, Option<Action>, Option<String>) {
+    pub fn play(&mut self, input: Input) -> Result<(), String> {
+        use Input::*;
+
+        let mut input_state = Game::Finished;
+        std::mem::swap(self, &mut input_state);
+
+        let (next, err) = match (input_state, input) {
+            (Bidding(state), Bid(amount)) => (state.bid(amount).into(), Ok(())),
+            (input_state, _) => (input_state, Err("".to_owned())),
+        };
+
+        *self = next;
+        err
+    }
+
+    pub fn hand(&self, player: Player) -> Option<&[Option<Card>]> {
         match self {
-            Bidding(b) => b.get_str(s),
-            SelectingTrump(b) => b.get_str(s),
-            Playing(b) => b.get_str(s),
-            FinishedRound(b) => b.get_str(s),
-            Finished(b) => (b.into(), None, None),
+            Bidding(b) => Some(b.hand(player)),
+            SelectingTrump(b) => Some(b.hand(player)),
+            Playing(b) => Some(b.hand(player)),
+            FinishedRound(b) => Some(b.hand(player)),
+            Finished => None,
         }
     }
 
-    pub fn hand(&self, player: Player) -> &[Option<Card>] {
+    pub fn turn(&self) -> Option<Player> {
         match self {
-            Bidding(b) => b.hand(player),
-            SelectingTrump(b) => b.hand(player),
-            Playing(b) => b.hand(player),
-            FinishedRound(b) => b.hand(player),
-            Finished(b) => b.hand(player),
-        }
-    }
-
-    pub fn turn(&self) -> Player {
-        match self {
-            Bidding(b) => b.turn(),
-            SelectingTrump(b) => b.turn(),
-            Playing(b) => b.turn(),
-            FinishedRound(b) => b.turn(),
-            Finished(b) => b.turn(),
+            Bidding(b) => Some(b.turn()),
+            SelectingTrump(b) => Some(b.turn()),
+            Playing(b) => Some(b.turn()),
+            FinishedRound(b) => Some(b.turn()),
+            Finished => None,
         }
     }
 
@@ -82,9 +72,9 @@ impl Game {
             _ => None,
         }
     }
-    pub fn finished(self) -> Option<states::Finished> {
+    pub fn finished(self) -> Option<()> {
         match self {
-            Finished(x) => Some(x),
+            Finished => Some(()),
             _ => None,
         }
     }
@@ -92,6 +82,27 @@ impl Game {
         match self {
             FinishedRound(x) => Some(x),
             _ => None,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub enum Input {
+    Bid(usize),
+    Select(Suit),
+    Play(Card),
+    Next,
+}
+
+impl<T, U> From<Either<T, U>> for Game
+where
+    T: Into<Game>,
+    U: Into<Game>,
+{
+    fn from(val: Either<T, U>) -> Self {
+        match val {
+            Either::Left(t) => t.into(),
+            Either::Right(t) => t.into(),
         }
     }
 }
@@ -115,118 +126,14 @@ impl From<states::Playing> for Game {
 }
 
 impl From<states::Finished> for Game {
-    fn from(val: states::Finished) -> Self {
-        Finished(val)
+    fn from(_: states::Finished) -> Self {
+        Finished
     }
 }
 
 impl From<states::FinishedRound> for Game {
     fn from(val: states::FinishedRound) -> Self {
         FinishedRound(val)
-    }
-}
-
-trait GameState<'a>: Into<Game> {
-    type Input: Deserialize<'a>;
-    type Error: Serialize;
-
-    fn get_str(self, s: &'a str) -> (Game, Option<Action>, Option<String>) {
-        match from_str(s) {
-            Ok(a) => {
-                let (s, a, e) = self.get_message(a);
-                (s, a, to_string(&e).ok())
-            }
-            _ => (self.into(), None, None),
-        }
-    }
-
-    fn get_message(
-        self,
-        message: Message<Self::Input>,
-    ) -> (Game, Option<Action>, Option<Self::Error>) {
-        match message {
-            Message::Action(a) => (self.into(), Some(a), None),
-            Message::Play(i) => {
-                let (state, error) = self.receive(i);
-                (state, None, error)
-            }
-        }
-    }
-
-    fn receive(self, input: Self::Input) -> (Game, Option<Self::Error>);
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum BiddingInput {
-    Bid(usize),
-}
-
-impl<'a> GameState<'a> for states::Bidding {
-    type Input = BiddingInput;
-    type Error = ();
-
-    fn receive(self, input: Self::Input) -> (Game, Option<Self::Error>) {
-        match input {
-            Self::Input::Bid(amount) => match self.bid(amount) {
-                Left(bidding) => (bidding.into(), None),
-                Right(selecting_trump) => (selecting_trump.into(), None),
-            },
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum SelectingTrumpInput {
-    Selection(Suit),
-}
-
-impl<'a> GameState<'a> for states::SelectingTrump {
-    type Input = SelectingTrumpInput;
-    type Error = ();
-
-    fn receive(self, input: Self::Input) -> (Game, Option<Self::Error>) {
-        match input {
-            Self::Input::Selection(suit) => (self.select(suit).into(), None),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum PlayingInput {
-    Play(Card),
-}
-
-impl<'a> GameState<'a> for states::Playing {
-    type Input = PlayingInput;
-    type Error = &'a str;
-
-    fn receive(self, input: Self::Input) -> (Game, Option<Self::Error>) {
-        match input {
-            // TODO, don't discard error message
-            Self::Input::Play(card) => match self.play(card) {
-                Left((a, e)) => (a.into(), e),
-                Right(a) => (a.into(), None),
-            },
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub enum FinishedRoundInput {
-    Next,
-}
-
-impl<'a> GameState<'a> for states::FinishedRound {
-    type Input = FinishedRoundInput;
-    type Error = ();
-
-    fn receive(self, input: Self::Input) -> (Game, Option<Self::Error>) {
-        match input {
-            Self::Input::Next => match self.next() {
-                Left(a) => (a.into(), None),
-                Right(a) => (a.into(), None),
-            },
-        }
     }
 }
 
