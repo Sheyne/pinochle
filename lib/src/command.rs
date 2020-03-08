@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PlayingResponse {
     Played(Player, Input),
+    Resigned(Player),
     Error(String),
 }
 

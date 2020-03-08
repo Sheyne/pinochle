@@ -38,7 +38,7 @@ where
                         Some(table) => table,
                     };
 
-                    stream = table.play(addr, stream).await;
+                    stream = table.join(addr, stream).await;
                 }
                 _ => (),
             },
@@ -79,6 +79,47 @@ impl Table {
         Table {
             state: RwLock::new(Lobby(Mutex::new(TableStateInternal::new()))),
             room: Room::new(),
+        }
+    }
+
+    fn play(
+        &self,
+        addr: &SocketAddr,
+        message: &str,
+        player_map: &PlayerMap<SocketAddr>,
+        game: &RwLock<Game>,
+    ) -> Result<(Option<TableStates>, Completion), String> {
+        let connected_player = player_map
+            .get_player(addr)
+            .ok_or("Not playing".to_owned())?;
+        let input = from_str(message).map_err(|_| "Invalid message".to_owned())?;
+
+        match input {
+            PlayingInput::Resign => {
+                let response = PlayingResponse::Resigned(connected_player);
+                let message = to_string(&response).unwrap();
+                let message = Message::Text(message);
+                self.room.broadcast(message);
+
+                Ok((Some(Lobby(Mutex::new(TableStateInternal::new()))), Finished))
+            }
+            PlayingInput::Play(game_input) => {
+                {
+                    let mut game = game.write().unwrap();
+                    if game.turn().map_or(false, |p| p == connected_player) {
+                        game.play(game_input.clone())?
+                    } else {
+                        Err("Not your turn".to_owned())?
+                    }
+                }
+
+                let response = PlayingResponse::Played(connected_player, game_input);
+                let message = to_string(&response).unwrap();
+                let message = Message::Text(message);
+                self.room.broadcast(message);
+
+                Ok((None, Continue))
+            }
         }
     }
 
@@ -138,61 +179,17 @@ impl Table {
                     (None, Continue)
                 }
             }
-            Playing(player_map, game) => {
-                if let Ok(input) = from_str(&message) {
-                    match input {
-                        PlayingInput::Resign => {
-                            (Some(Lobby(Mutex::new(TableStateInternal::new()))), Finished)
-                        }
-                        PlayingInput::Play(game_input) => {
-                            let (player, result) = {
-                                let mut game = game.write().unwrap();
-                                let player = game.turn();
+            Playing(player_map, game) => match self.play(addr, &message, player_map, game) {
+                Ok(c) => c,
+                Err(e) => {
+                    let response = PlayingResponse::Error(e);
+                    let message = to_string(&response).unwrap();
+                    let message = Message::Text(message);
+                    self.room.send_to(addr, message);
 
-                                if let Some(player) = player {
-                                    if let Some(connected_player) = player_map.get_player(addr) {
-                                        if player == connected_player {
-                                            let result = game.play(game_input.clone());
-                                            (
-                                                Some(player),
-                                                result.clone().map_err(|e| e.to_string()),
-                                            )
-                                        } else {
-                                            (None, Err("Not active player".to_owned()))
-                                        }
-                                    } else {
-                                        (None, Err("Not playing".to_owned()))
-                                    }
-                                } else {
-                                    (None, Err("Game is over".to_owned()))
-                                }
-                            };
-
-                            match result {
-                                Ok(_) => {
-                                    let response = PlayingResponse::Played(
-                                        player.expect("Player must be non none or we'd be in Err"),
-                                        game_input,
-                                    );
-                                    let message = to_string(&response).unwrap();
-                                    let message = Message::Text(message);
-                                    self.room.broadcast(message)
-                                }
-                                Err(e) => {
-                                    let response = PlayingResponse::Error(e);
-                                    let message = to_string(&response).unwrap();
-                                    let message = Message::Text(message);
-                                    self.room.send_to(addr, message)
-                                }
-                            }
-
-                            (None, Continue)
-                        }
-                    }
-                } else {
                     (None, Continue)
                 }
-            }
+            },
         };
         if let Some(new_state) = new_state {
             *self.state.write().unwrap() = new_state;
@@ -207,7 +204,7 @@ impl Table {
         }
     }
 
-    pub async fn play<S, E>(&self, a: SocketAddr, stream: S) -> S
+    pub async fn join<S, E>(&self, a: SocketAddr, stream: S) -> S
     where
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
     {
