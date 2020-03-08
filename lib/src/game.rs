@@ -15,8 +15,8 @@ pub enum Game {
 }
 
 impl Game {
-    pub fn new(first_player: Player, hands: [Vec<Card>; NUMBER_OF_PLAYERS]) -> states::Bidding {
-        states::Game::new(first_player, states::hands_to_option(hands))
+    pub fn new(first_player: Player, hands: [Vec<Card>; NUMBER_OF_PLAYERS]) -> Game {
+        states::Bidding::new(first_player, states::hands_to_option(hands)).into()
     }
 
     pub fn play(&mut self, input: Input) -> Result<(), String> {
@@ -27,6 +27,14 @@ impl Game {
 
         let (next, err) = match (input_state, input) {
             (Bidding(state), Bid(amount)) => (state.bid(amount).into(), Ok(())),
+            (SelectingTrump(state), SelectSuit(suit)) => (state.select(suit).into(), Ok(())),
+            (Playing(state), Play(card)) => match state.play(card) {
+                Either::Left((state, err)) => {
+                    (state.into(), err.map_or(Ok(()), |e| Err(e.to_owned())))
+                }
+                Either::Right(state) => (state.into(), Ok(())),
+            },
+            (FinishedRound(state), Next) => (state.next().into(), Ok(())),
             (input_state, _) => (input_state, Err("".to_owned())),
         };
 
@@ -89,7 +97,7 @@ impl Game {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Input {
     Bid(usize),
-    Select(Suit),
+    SelectSuit(Suit),
     Play(Card),
     Next,
 }
@@ -140,7 +148,6 @@ impl From<states::FinishedRound> for Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::to_string;
 
     const HX: Card = Card {
         suit: Suit::Heart,
@@ -152,31 +159,22 @@ mod tests {
     };
 
     #[test]
-    fn simple_round() {
-        let game = Game::new(Player::A, [vec![HX], vec![HX], vec![HX], vec![HA]]);
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(BiddingInput::Bid(210))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(BiddingInput::Bid(210))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(BiddingInput::Bid(220))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(BiddingInput::Bid(210))).unwrap());
-        assert_eq!(game.turn(), Player::C);
-        let (game, _, _) = game.get_str(
-            &to_string(&Message::Play(SelectingTrumpInput::Selection(Suit::Heart))).unwrap(),
-        );
-        assert_eq!(game.turn(), Player::C);
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(PlayingInput::Play(HX))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(PlayingInput::Play(HA))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(PlayingInput::Play(HX))).unwrap());
-        let (game, _, _) =
-            game.get_str(&to_string(&Message::Play(PlayingInput::Play(HX))).unwrap());
+    fn simple_round() -> Result<(), String> {
+        let mut game = Game::new(Player::A, [vec![HX], vec![HX], vec![HX], vec![HA]]);
+        game.play(Input::Bid(210))?;
+        game.play(Input::Bid(210))?;
+        game.play(Input::Bid(220))?;
+        game.play(Input::Bid(210))?;
+        assert_eq!(game.turn(), Some(Player::C));
+        game.play(Input::SelectSuit(Suit::Heart))?;
+        assert_eq!(game.turn(), Some(Player::C));
+        game.play(Input::Play(HX))?;
+        game.play(Input::Play(HA))?;
+        game.play(Input::Play(HX))?;
+        game.play(Input::Play(HX))?;
         let game = game.finished_round().unwrap();
         assert_eq!(game.taken(), [vec![], vec![HX, HA, HX, HX]]);
         game.next();
+        Ok(())
     }
 }

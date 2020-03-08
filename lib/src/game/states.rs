@@ -23,16 +23,15 @@ pub struct FinishedRoundState {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct FinishedState;
+pub struct Finished([usize; NUMBER_OF_TEAMS]);
 
-pub type Bidding = Game<BiddingState>;
-pub type SelectingTrump = Game<SelectingTrumpState>;
-pub type Playing = Game<PlayingState>;
-pub type FinishedRound = Game<FinishedRoundState>;
-pub type Finished = Game<FinishedState>;
+pub type Bidding = Active<BiddingState>;
+pub type SelectingTrump = Active<SelectingTrumpState>;
+pub type Playing = Active<PlayingState>;
+pub type FinishedRound = Active<FinishedRoundState>;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Game<T> {
+pub struct Active<T> {
     hands: [Vec<Option<Card>>; NUMBER_OF_PLAYERS],
     scores: [usize; NUMBER_OF_TEAMS],
     bids: Vec<usize>,
@@ -41,7 +40,7 @@ pub struct Game<T> {
     state: T,
 }
 
-impl<T> Game<T> {
+impl<T> Active<T> {
     pub fn hand(&self, p: Player) -> &[Option<Card>] {
         &self.hands[p as usize]
     }
@@ -98,7 +97,7 @@ impl Bidding {
                 .max_by_key(|(bid, _)| *bid)
                 .unwrap();
 
-            Either::Right(Game {
+            Either::Right(Active {
                 scores: self.scores,
                 turn: highest_bidder,
                 initial_bidder: self.initial_bidder,
@@ -112,7 +111,7 @@ impl Bidding {
 
 impl SelectingTrump {
     pub fn select(self, suit: Suit) -> Playing {
-        Game {
+        Active {
             scores: self.scores,
             turn: self.state.0,
             bids: self.bids,
@@ -185,7 +184,7 @@ impl Playing {
     fn calculate_score(mut self) -> FinishedRound {
         *self.score_mut(Team::Red) += 1;
 
-        Game {
+        Active {
             hands: self.hands,
             turn: self.turn,
             initial_bidder: self.initial_bidder,
@@ -208,16 +207,9 @@ impl FinishedRound {
         self.bids.clear();
 
         if *self.scores.iter().max().unwrap() > 2000 {
-            Either::Right(Game {
-                turn: Player::A,
-                initial_bidder: self.initial_bidder.next(),
-                hands: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
-                bids: self.bids,
-                scores: self.scores,
-                state: FinishedState,
-            })
+            Either::Right(Finished(self.scores))
         } else {
-            Either::Left(Game {
+            Either::Left(Active {
                 turn: Player::A,
                 initial_bidder: self.initial_bidder.next(),
                 hands: hands_to_option(shuffle()),
