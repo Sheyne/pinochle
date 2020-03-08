@@ -185,20 +185,36 @@ impl<T> PlayerMap<T> {
 
     pub fn map<F, U>(&self, f: F) -> PlayerMap<U>
     where
-        F: Fn(&T) -> U,
+        F: Fn(Player, &T) -> U,
     {
         let [a, b, c, d] = &self.values;
 
-        PlayerMap::new(f(a), f(b), f(c), f(d))
+        PlayerMap::new(
+            f(Player::A, a),
+            f(Player::B, b),
+            f(Player::C, c),
+            f(Player::D, d),
+        )
     }
 
     pub fn map_move<F, U>(self, mut f: F) -> PlayerMap<U>
     where
-        F: FnMut(T) -> U,
+        F: FnMut(Player, T) -> U,
     {
         let [a, b, c, d] = self.values;
 
-        PlayerMap::new(f(a), f(b), f(c), f(d))
+        PlayerMap::new(
+            f(Player::A, a),
+            f(Player::B, b),
+            f(Player::C, c),
+            f(Player::D, d),
+        )
+    }
+}
+
+impl<T> PlayerMap<Option<T>> {
+    pub fn unwrap(self) -> PlayerMap<T> {
+        return self.map_move(|_, x| x.unwrap());
     }
 }
 

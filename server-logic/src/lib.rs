@@ -4,7 +4,7 @@ use futures::{
 };
 use pinochle_lib::{
     command::{Command, PlayingInput, PlayingResponse, TableCommand, TableState},
-    game::Game,
+    game::{states::Project, Game},
     shuffle, Player, PlayerMap,
 };
 pub use room::*;
@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
 use tungstenite::Message;
-
 pub mod room;
 
 pub type State = RwLock<HashMap<String, Arc<Table>>>;
@@ -169,10 +168,16 @@ impl Table {
                     .all(|b| b)
                 {
                     println!("Starting playing");
-                    let game = Game::new(Player::A, shuffle()).into();
-                    self.room
-                        .broadcast(Message::Text(to_string(&game).unwrap()));
-                    let s = Playing(s.players.map(|x| x.unwrap()), RwLock::new(game));
+                    let game: Game = Game::new(Player::A, shuffle()).into();
+                    self.room.send(|dest| {
+                        if let Some(player) = s.players.get_player(&Some(*dest)) {
+                            let projected = game.project(player);
+                            Some(Message::Text(to_string(&projected).unwrap()))
+                        } else {
+                            None
+                        }
+                    });
+                    let s = Playing(s.players.clone().unwrap(), RwLock::new(game));
 
                     (Some(s), Continue)
                 } else {

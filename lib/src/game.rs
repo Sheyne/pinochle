@@ -94,6 +94,18 @@ impl Game {
     }
 }
 
+impl states::Project for Game {
+    fn project(&self, player: Player) -> Self {
+        match self {
+            Bidding(b) => b.project(player).into(),
+            SelectingTrump(b) => b.project(player).into(),
+            Playing(b) => b.project(player).into(),
+            FinishedRound(b) => b.project(player).into(),
+            Finished => Finished,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Input {
     Bid(usize),

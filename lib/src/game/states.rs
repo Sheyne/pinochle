@@ -6,20 +6,45 @@ use std::cmp::Ordering;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BiddingState;
 
+impl Project for BiddingState {
+    fn project(&self, _: Player) -> Self {
+        BiddingState
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SelectingTrumpState(Player);
 
-#[derive(Serialize, Deserialize, Debug)]
+impl Project for SelectingTrumpState {
+    fn project(&self, _: Player) -> Self {
+        let SelectingTrumpState(a) = self;
+        SelectingTrumpState(*a)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlayingState {
     pub play_area: Vec<Card>,
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl Project for PlayingState {
+    fn project(&self, _: Player) -> Self {
+        self.clone()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FinishedRoundState {
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
+}
+
+impl Project for FinishedRoundState {
+    fn project(&self, _: Player) -> Self {
+        self.clone()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -40,7 +65,14 @@ pub struct Active<T> {
     state: T,
 }
 
-impl<T> Active<T> {
+pub trait Project {
+    fn project(&self, player: Player) -> Self;
+}
+
+impl<T> Active<T>
+where
+    T: Project,
+{
     pub fn hand(&self, p: Player) -> &[Option<Card>] {
         self.hands.get_value(p)
     }
@@ -65,6 +97,28 @@ impl<T> Active<T> {
     }
     pub fn initial_bidder(&self) -> Player {
         self.initial_bidder
+    }
+}
+
+impl<T> Project for Active<T>
+where
+    T: Project,
+{
+    fn project(&self, player: Player) -> Self {
+        Self {
+            hands: self.hands.map(|p, x| {
+                if p == player {
+                    x.clone()
+                } else {
+                    x.iter().map(|_| None).collect()
+                }
+            }),
+            scores: self.scores.clone(),
+            bids: self.bids.clone(),
+            turn: self.turn.clone(),
+            initial_bidder: self.initial_bidder,
+            state: self.state.project(player),
+        }
     }
 }
 
@@ -222,9 +276,7 @@ impl FinishedRound {
 }
 
 pub fn hands_to_option(hands: PlayerMap<Vec<Card>>) -> PlayerMap<Vec<Option<Card>>> {
-    let f = |x: Vec<Card>| -> Vec<Option<Card>> { x.iter().map(|a| Some(*a)).collect() };
-
-    hands.map_move(f)
+    hands.map_move(|_, x| x.iter().map(|a| Some(*a)).collect())
 }
 
 fn has_suit(hand: &[Option<Card>], suit: Suit) -> bool {
