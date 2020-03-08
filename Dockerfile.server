@@ -9,6 +9,7 @@ RUN apt-get install musl-tools -y
 RUN rustup target add x86_64-unknown-linux-musl
 ADD lib/ lib/
 ADD server/ server/
+ADD server-logic/ server-logic/
 RUN cd server && RUSTFLAGS=-Clinker=musl-gcc cargo build --release --bin pinochle-server --target=x86_64-unknown-linux-musl
 
 
