@@ -15,7 +15,7 @@ pub enum Game {
 }
 
 impl Game {
-    pub fn new(first_player: Player, hands: [Vec<Card>; NUMBER_OF_PLAYERS]) -> Game {
+    pub fn new(first_player: Player, hands: PlayerMap<Vec<Card>>) -> Game {
         states::Bidding::new(first_player, states::hands_to_option(hands)).into()
     }
 
@@ -160,7 +160,9 @@ mod tests {
 
     #[test]
     fn simple_round() -> Result<(), String> {
-        let mut game = Game::new(Player::A, [vec![HX], vec![HX], vec![HX], vec![HA]]);
+        let hands = PlayerMap::new(vec![HX], vec![HX], vec![HX], vec![HA]);
+
+        let mut game = Game::new(Player::A, hands);
         game.play(Input::Bid(210))?;
         game.play(Input::Bid(210))?;
         game.play(Input::Bid(220))?;

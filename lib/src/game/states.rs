@@ -32,7 +32,7 @@ pub type FinishedRound = Active<FinishedRoundState>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Active<T> {
-    hands: [Vec<Option<Card>>; NUMBER_OF_PLAYERS],
+    hands: PlayerMap<Vec<Option<Card>>>,
     scores: [usize; NUMBER_OF_TEAMS],
     bids: Vec<usize>,
     turn: Player,
@@ -42,11 +42,11 @@ pub struct Active<T> {
 
 impl<T> Active<T> {
     pub fn hand(&self, p: Player) -> &[Option<Card>] {
-        &self.hands[p as usize]
+        self.hands.get_value(p)
     }
 
     fn hand_mut(&mut self, p: Player) -> &mut Vec<Option<Card>> {
-        &mut self.hands[p as usize]
+        self.hands.get_value_mut(p)
     }
 
     pub fn score(&self, team: Team) -> usize {
@@ -69,7 +69,7 @@ impl<T> Active<T> {
 }
 
 impl Bidding {
-    pub fn new(first_player: Player, hands: [Vec<Option<Card>>; NUMBER_OF_PLAYERS]) -> Bidding {
+    pub fn new(first_player: Player, hands: PlayerMap<Vec<Option<Card>>>) -> Bidding {
         Bidding {
             hands: hands,
             bids: Vec::new(),
@@ -174,7 +174,7 @@ impl Playing {
 
             self.turn = winner;
 
-            if self.hands[0].len() == 0 {
+            if self.hand(Player::A).len() == 0 {
                 return Either::Right(self.calculate_score());
             }
         }
@@ -221,13 +221,10 @@ impl FinishedRound {
     }
 }
 
-pub fn hands_to_option(
-    hands: [Vec<Card>; NUMBER_OF_PLAYERS],
-) -> [Vec<Option<Card>>; NUMBER_OF_PLAYERS] {
+pub fn hands_to_option(hands: PlayerMap<Vec<Card>>) -> PlayerMap<Vec<Option<Card>>> {
     let f = |x: Vec<Card>| -> Vec<Option<Card>> { x.iter().map(|a| Some(*a)).collect() };
 
-    let [a, b, c, d] = hands;
-    [f(a), f(b), f(c), f(d)]
+    hands.map_move(f)
 }
 
 fn has_suit(hand: &[Option<Card>], suit: Suit) -> bool {
@@ -310,12 +307,12 @@ mod test {
     fn simple_round() {
         let game = Bidding::new(
             Player::A,
-            [
+            PlayerMap::new(
                 vec![Some(HX)],
                 vec![Some(HX)],
                 vec![Some(HX)],
                 vec![Some(HA)],
-            ],
+            ),
         );
         let game = game.bid(210);
         let game = game.left().unwrap().bid(210);

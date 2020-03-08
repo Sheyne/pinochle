@@ -36,7 +36,7 @@ pub struct TableState {
 impl TableState {
     pub fn new(player: Player) -> TableState {
         TableState {
-            ready: PlayerMap::new(),
+            ready: PlayerMap::new(false, false, false, false),
             player: player,
         }
     }

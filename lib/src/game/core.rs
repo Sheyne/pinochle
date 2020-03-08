@@ -21,7 +21,7 @@ pub enum Suit {
     Spade,
 }
 
-pub fn shuffle() -> [Vec<Card>; NUMBER_OF_PLAYERS] {
+pub fn shuffle() -> PlayerMap<Vec<Card>> {
     let mut cards: Vec<Card> = chain(
         iproduct!(Suit::iter(), Rank::iter()),
         iproduct!(Suit::iter(), Rank::iter()),
@@ -36,12 +36,12 @@ pub fn shuffle() -> [Vec<Card>; NUMBER_OF_PLAYERS] {
     let cards_each: usize = cards.len() / NUMBER_OF_PLAYERS;
     let mut iter = cards.chunks(cards_each);
 
-    [
+    PlayerMap::new(
         iter.next().unwrap().to_vec(),
         iter.next().unwrap().to_vec(),
         iter.next().unwrap().to_vec(),
         iter.next().unwrap().to_vec(),
-    ]
+    )
 }
 impl Suit {
     pub fn to_string(&self) -> &str {
@@ -157,41 +157,48 @@ impl Player {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlayerMap<T> {
-    values: [Option<T>; NUMBER_OF_PLAYERS],
+    values: [T; NUMBER_OF_PLAYERS],
 }
 
 impl<T> PlayerMap<T> {
-    pub fn new() -> PlayerMap<T> {
+    pub fn new(a: T, b: T, c: T, d: T) -> PlayerMap<T> {
         PlayerMap {
-            values: [None, None, None, None],
+            values: [a, b, c, d],
         }
     }
 
-    pub fn get_value(&self, p: Player) -> &Option<T> {
+    pub fn get_value(&self, p: Player) -> &T {
         &self.values[p as usize]
     }
 
-    pub fn get_value_mut(&mut self, p: Player) -> &mut Option<T> {
+    pub fn get_value_mut(&mut self, p: Player) -> &mut T {
         &mut self.values[p as usize]
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Player, &'a T)> {
-        Player::A
-            .zip(&self.values)
-            .filter(|(_, v)| v.is_some())
-            .map(|(p, v)| {
-                (
-                    p,
-                    match v {
-                        Some(v) => v,
-                        None => panic!(),
-                    },
-                )
-            })
+        Player::A.zip(&self.values)
     }
 
-    pub fn iter_all<'a>(&'a self) -> impl Iterator<Item = (Player, &'a Option<T>)> {
+    pub fn iter_all<'a>(&'a self) -> impl Iterator<Item = (Player, &'a T)> {
         Player::A.zip(&self.values)
+    }
+
+    pub fn map<F, U>(&self, f: F) -> PlayerMap<U>
+    where
+        F: Fn(&T) -> U,
+    {
+        let [a, b, c, d] = &self.values;
+
+        PlayerMap::new(f(a), f(b), f(c), f(d))
+    }
+
+    pub fn map_move<F, U>(self, mut f: F) -> PlayerMap<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        let [a, b, c, d] = self.values;
+
+        PlayerMap::new(f(a), f(b), f(c), f(d))
     }
 }
 
@@ -203,10 +210,7 @@ where
         self.values
             .iter()
             .zip(Player::A)
-            .filter(|(v, _)| match v {
-                Some(v) => v == value,
-                None => false,
-            })
+            .filter(|(v, _)| v == &value)
             .map(|(_, p)| p)
             .next()
     }

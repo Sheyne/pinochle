@@ -49,7 +49,7 @@ where
 
 #[derive(Debug)]
 struct TableStateInternal {
-    players: PlayerMap<SocketAddr>,
+    players: PlayerMap<Option<SocketAddr>>,
     ready: HashMap<SocketAddr, bool>,
 }
 
@@ -69,7 +69,7 @@ impl TableStateInternal {
     fn new() -> TableStateInternal {
         TableStateInternal {
             ready: HashMap::new(),
-            players: PlayerMap::new(),
+            players: PlayerMap::new(None, None, None, None),
         }
     }
 }
@@ -89,12 +89,12 @@ impl Table {
 
                 match from_str(&message) {
                     Ok(TableCommand::SetReady(b)) => {
-                        if s.players.get_player(addr).is_some() {
+                        if s.players.get_player(&Some(*addr)).is_some() {
                             s.ready.insert(*addr, b);
                         }
                     }
                     Ok(TableCommand::SetPlayer(p)) => {
-                        if let Some(player) = s.players.get_player(addr) {
+                        if let Some(player) = s.players.get_player(&Some(*addr)) {
                             *s.players.get_value_mut(player) = None;
                         }
                         let player_addr = s.players.get_value_mut(p);
@@ -109,11 +109,11 @@ impl Table {
                 }
 
                 self.room.send(|addr| {
-                    if let Some(player) = s.players.get_player(addr) {
+                    if let Some(player) = s.players.get_player(&Some(*addr)) {
                         let mut response = TableState::new(player);
                         for (player, ready) in s.ready.iter() {
-                            if let Some(player) = s.players.get_player(&player) {
-                                *response.ready.get_value_mut(player) = Some(*ready);
+                            if let Some(player) = s.players.get_player(&Some(*player)) {
+                                *response.ready.get_value_mut(player) = *ready;
                             }
                         }
                         Some(Message::Text(to_string(&response).unwrap()))
@@ -131,7 +131,7 @@ impl Table {
                     let game = Game::new(Player::A, shuffle()).into();
                     self.room
                         .broadcast(Message::Text(to_string(&game).unwrap()));
-                    let s = Playing(s.players.clone(), RwLock::new(game));
+                    let s = Playing(s.players.map(|x| x.unwrap()), RwLock::new(game));
 
                     (Some(s), Continue)
                 } else {
