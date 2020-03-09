@@ -122,7 +122,7 @@ impl Table {
         }
     }
 
-    fn table_info(&self, player: Player, s: &TableStateInternal) -> Message {
+    fn table_info(&self, player: Option<Player>, s: &TableStateInternal) -> Message {
         let mut response = TableState::new(player);
         for (player, ready) in s.ready.iter() {
             if let Some(player) = s.players.get_player(&Some(*player)) {
@@ -158,13 +158,8 @@ impl Table {
                     _ => (),
                 }
 
-                self.room.send(|addr| {
-                    if let Some(player) = s.players.get_player(&Some(*addr)) {
-                        Some(self.table_info(player, &s))
-                    } else {
-                        None
-                    }
-                });
+                self.room
+                    .send(|addr| Some(self.table_info(s.players.get_player(&Some(*addr)), &s)));
 
                 if s.players
                     .iter_all()
@@ -231,8 +226,9 @@ impl Table {
 
                         if let Some(player) = player {
                             *table_state.players.get_value_mut(player) = Some(a);
-                            self.room.send_to(&a, self.table_info(player, &table_state));
                         }
+
+                        self.room.send_to(&a, self.table_info(player, &table_state));
                     }
                     _ => {}
                 },

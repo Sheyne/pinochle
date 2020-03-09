@@ -31,11 +31,11 @@ pub enum TableCommand {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct TableState {
     pub ready: PlayerMap<bool>,
-    pub player: Player,
+    pub player: Option<Player>,
 }
 
 impl TableState {
-    pub fn new(player: Player) -> TableState {
+    pub fn new(player: Option<Player>) -> TableState {
         TableState {
             ready: PlayerMap::new(false, false, false, false),
             player: player,
