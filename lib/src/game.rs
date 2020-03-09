@@ -5,7 +5,7 @@ pub use Game::*;
 pub mod core;
 pub mod states;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum Game {
     Bidding(states::Bidding),
     SelectingTrump(states::SelectingTrump),

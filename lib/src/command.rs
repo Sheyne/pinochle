@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum PlayingResponse {
     Played(Player, Input),
     Resigned(Player),
+    BackToReady,
     Error(String),
 }
 

@@ -3,7 +3,7 @@ use either::Either;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct BiddingState;
 
 impl Project for BiddingState {
@@ -12,7 +12,7 @@ impl Project for BiddingState {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct SelectingTrumpState(Player);
 
 impl Project for SelectingTrumpState {
@@ -22,7 +22,7 @@ impl Project for SelectingTrumpState {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct PlayingState {
     pub play_area: Vec<Card>,
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
@@ -31,11 +31,15 @@ pub struct PlayingState {
 
 impl Project for PlayingState {
     fn project(&self, _: Player) -> Self {
-        self.clone()
+        Self {
+            play_area: self.play_area.clone(),
+            taken: self.taken.clone(),
+            trump: self.trump.clone(),
+        }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct FinishedRoundState {
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
@@ -43,7 +47,10 @@ pub struct FinishedRoundState {
 
 impl Project for FinishedRoundState {
     fn project(&self, _: Player) -> Self {
-        self.clone()
+        Self {
+            taken: self.taken.clone(),
+            trump: self.trump.clone(),
+        }
     }
 }
 
@@ -55,7 +62,7 @@ pub type SelectingTrump = Active<SelectingTrumpState>;
 pub type Playing = Active<PlayingState>;
 pub type FinishedRound = Active<FinishedRoundState>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Active<T> {
     hands: PlayerMap<Vec<Option<Card>>>,
     scores: [usize; NUMBER_OF_TEAMS],

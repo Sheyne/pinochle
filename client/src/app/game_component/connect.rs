@@ -5,6 +5,7 @@ use yew::components::Select;
 use yew::events::InputData;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
+use yew::services::ConsoleService;
 
 #[derive(Display, PartialEq, Clone, EnumIter, Debug, Copy)]
 pub enum Server {
@@ -14,6 +15,7 @@ pub enum Server {
     Heroku,
 }
 
+#[derive(Debug)]
 pub enum Msg {
     Connect,
     SetTable(String),
@@ -33,6 +35,7 @@ pub struct Props {
 pub struct Connect {
     props: Props,
     link: ComponentLink<Self>,
+    console: ConsoleService,
 }
 
 impl Component for Connect {
@@ -40,15 +43,33 @@ impl Component for Connect {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        Self { props, link }
+        Self {
+            props,
+            link,
+            console: ConsoleService::new(),
+        }
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.console.log(&format!("{:?}", props));
+        self.props = props;
+        true
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        self.console.log(&format!(
+            "{:?}, ({}, {})",
+            msg,
+            self.props.server,
+            self.props.table.clone()
+        ));
+
         match msg {
-            Connect => self
-                .props
-                .onsubmit
-                .emit((self.props.server, self.props.table.clone())),
+            Connect => {
+                self.props
+                    .onsubmit
+                    .emit((self.props.server, self.props.table.clone()));
+            }
             SetServer(server) => self.props.server = server,
             SetTable(table) => self.props.table = table,
         }
@@ -63,7 +84,7 @@ impl Component for Connect {
 
                 <input
                     type="text"
-                    value={&self.props.table}
+                    value=&self.props.table
                     oninput=self.link.callback(|e: InputData| Msg::SetTable(e.value)) />
                 <button onclick=self.link.callback(|_| Msg::Connect)>{ "Connect" }</button>
             </div>

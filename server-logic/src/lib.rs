@@ -214,7 +214,8 @@ impl Table {
     {
         println!("Joining table {}", a);
 
-        self.room
+        let stream = self
+            .room
             .enter(
                 a,
                 stream,
@@ -234,6 +235,30 @@ impl Table {
                 },
                 |m| self.main_loop(&a, m),
             )
-            .await
+            .await;
+
+        match &*self.state.read().unwrap() {
+            Lobby(table_state) => {
+                let mut table_state = table_state.lock().unwrap();
+
+                let player = table_state.players.get_player(&Some(a));
+                table_state.ready.insert(a, false);
+
+                if let Some(player) = player {
+                    *table_state.players.get_value_mut(player) = None;
+                }
+
+                self.room.send(|addr| {
+                    Some(
+                        self.table_info(table_state.players.get_player(&Some(*addr)), &table_state),
+                    )
+                });
+            }
+            Playing(_player_map, _game) => {
+
+            }
+        }
+
+        stream
     }
 }
