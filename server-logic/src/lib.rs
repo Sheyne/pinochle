@@ -122,6 +122,16 @@ impl Table {
         }
     }
 
+    fn table_info(&self, player: Player, s: &TableStateInternal) -> Message {
+        let mut response = TableState::new(player);
+        for (player, ready) in s.ready.iter() {
+            if let Some(player) = s.players.get_player(&Some(*player)) {
+                *response.ready.get_value_mut(player) = *ready;
+            }
+        }
+        Message::Text(to_string(&response).unwrap())
+    }
+
     fn text(&self, addr: &SocketAddr, message: String) -> Completion {
         let (new_state, completion) = match &*self.state.read().unwrap() {
             Lobby(s) => {
@@ -150,13 +160,7 @@ impl Table {
 
                 self.room.send(|addr| {
                     if let Some(player) = s.players.get_player(&Some(*addr)) {
-                        let mut response = TableState::new(player);
-                        for (player, ready) in s.ready.iter() {
-                            if let Some(player) = s.players.get_player(&Some(*player)) {
-                                *response.ready.get_value_mut(player) = *ready;
-                            }
-                        }
-                        Some(Message::Text(to_string(&response).unwrap()))
+                        Some(self.table_info(player, &s))
                     } else {
                         None
                     }
@@ -214,6 +218,26 @@ impl Table {
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
     {
         println!("Joining table {}", a);
-        self.room.enter(a, stream, |m| self.main_loop(&a, m)).await
+
+        self.room
+            .enter(
+                a,
+                stream,
+                || match &*self.state.read().unwrap() {
+                    Lobby(table_state) => {
+                        let mut table_state = table_state.lock().unwrap();
+
+                        let player = table_state.players.get_player(&None);
+
+                        if let Some(player) = player {
+                            *table_state.players.get_value_mut(player) = Some(a);
+                            self.room.send_to(&a, self.table_info(player, &table_state));
+                        }
+                    }
+                    _ => {}
+                },
+                |m| self.main_loop(&a, m),
+            )
+            .await
     }
 }

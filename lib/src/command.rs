@@ -28,7 +28,7 @@ pub enum TableCommand {
     SetReady(bool),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct TableState {
     pub ready: PlayerMap<bool>,
     pub player: Player,

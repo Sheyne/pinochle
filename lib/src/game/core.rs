@@ -121,13 +121,13 @@ impl Iterator for Player {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
 pub enum Team {
     Red = 0,
     Blue = 1,
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
 pub enum Player {
     A = 0,
     B = 1,
@@ -155,7 +155,7 @@ impl Player {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct PlayerMap<T> {
     values: [T; NUMBER_OF_PLAYERS],
 }

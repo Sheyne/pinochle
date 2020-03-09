@@ -75,9 +75,10 @@ where
         }
     }
 
-    pub async fn enter<E, S, C>(&self, key: Key, stream: S, mut callback: C) -> S
+    pub async fn enter<E, S, I, C>(&self, key: Key, stream: S, initial: I, mut callback: C) -> S
     where
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
+        I: FnOnce(),
         C: FnMut(Message) -> Completion,
     {
         let (mut outgoing, mut incoming) = stream.split();
@@ -87,6 +88,9 @@ where
         let mut forward = rx.map(Ok);
 
         let mut send_all = outgoing.send_all(&mut forward);
+
+        initial();
+
         loop {
             let selected = future::select(incoming.try_next(), send_all);
             let (message, send_all_) = left(selected.await).unwrap();
