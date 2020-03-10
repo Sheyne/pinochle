@@ -307,7 +307,12 @@ impl Table {
                 )));
                 let s = TableStateInternal {
                     players: player_map.map(|_, v| if v != &a { Some(*v) } else { None }),
-                    ready: HashMap::new(),
+                    ready: player_map
+                        .iter()
+                        .map(|(_, v)| *v)
+                        .filter(|v| v != &a)
+                        .map(|v| (v, true))
+                        .collect(),
                     game: game.read().unwrap().clone(),
                 };
                 self.room.send(|addr| {
