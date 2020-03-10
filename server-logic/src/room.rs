@@ -75,7 +75,7 @@ where
         }
     }
 
-    pub async fn enter<E, S, I, C>(&self, key: Key, stream: S, initial: I, mut callback: C) -> S
+    pub async fn enter<E, S, I, C>(&self, key: Key, stream: S, initial: I, mut callback: C) -> (S, Result<(), E>)
     where
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
         I: FnOnce(),
@@ -91,6 +91,8 @@ where
 
         initial();
 
+        let result : Result<(), E>;
+
         loop {
             let selected = future::select(incoming.try_next(), send_all);
             let (message, send_all_) = left(selected.await).unwrap();
@@ -98,16 +100,22 @@ where
 
             match message {
                 Ok(Some(message)) => match callback(message) {
-                    Finished => break,
+                    Finished => {
+                        result = Ok(());
+                        break},
                     _ => (),
                 },
-                _ => (),
+                Ok(None) => {},
+                Err(x) => {
+                    result = Err(x);
+                    break
+                },
             }
         }
 
         self.senders.write().unwrap().remove(&key);
 
-        incoming.reunite(outgoing).unwrap()
+        (incoming.reunite(outgoing).unwrap(), result)
     }
 }
 

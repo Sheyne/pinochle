@@ -20,6 +20,7 @@ pub type State = RwLock<HashMap<String, Arc<Table>>>;
 pub async fn get_connection<S, E>(state: &State, addr: SocketAddr, mut stream: S)
 where
     S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
+    E: std::fmt::Debug,
 {
     loop {
         let message = stream.try_next().await;
@@ -37,7 +38,15 @@ where
                         Some(table) => table,
                     };
 
-                    stream = table.join(addr, stream).await;
+                    match table.join(addr, stream).await {
+                        (result_stream, Ok(())) => {
+                            stream = result_stream;
+                        }
+                        (_, Err(e)) => {
+                            println!("Error: {:?}", e);
+                            break;
+                        }
+                    }
                 }
                 _ => (),
             },
@@ -208,7 +217,7 @@ impl Table {
         }
     }
 
-    pub async fn join<S, E>(&self, a: SocketAddr, stream: S) -> S
+    pub async fn join<S, E>(&self, a: SocketAddr, stream: S) -> (S, Result<(), E>)
     where
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
     {
@@ -258,6 +267,8 @@ impl Table {
 
             }
         }
+
+        println!("Exiting {}", a);
 
         stream
     }
