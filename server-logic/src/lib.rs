@@ -263,9 +263,7 @@ impl Table {
                     )
                 });
             }
-            Playing(_player_map, _game) => {
-
-            }
+            Playing(_player_map, _game) => {}
         }
 
         println!("Exiting {}", a);
