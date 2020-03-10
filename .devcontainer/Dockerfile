@@ -29,6 +29,7 @@ RUN apt-get update \
     # Install Rust components
     && rustup update \
     && rustup component add rls rust-analysis rust-src rustfmt clippy \
+    && rustup target add wasm32-unknown-unknown \
     && apt-get -y install npm \
     && npm install --global rollup \
     && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh \

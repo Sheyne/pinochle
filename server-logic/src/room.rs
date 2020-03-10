@@ -1,21 +1,15 @@
 use futures::{
     channel::mpsc::{unbounded, UnboundedSender},
-    future::{self, Either},
-    sink::{Sink, SinkExt},
-    stream::{Stream, TryStreamExt},
+    future::Either,
+    select,
+    sink::Sink,
+    stream::Stream,
     StreamExt,
 };
 use std::{collections::HashMap, sync::RwLock};
 
-pub struct Room<Key, Message> {
-    senders: RwLock<HashMap<Key, UnboundedSender<Message>>>,
-}
-
-fn left<L, R>(e: Either<L, R>) -> Option<L> {
-    match e {
-        Either::Left(l) => Some(l),
-        _ => None,
-    }
+pub struct Room<Key, PeerMessage> {
+    senders: RwLock<HashMap<Key, UnboundedSender<PeerMessage>>>,
 }
 
 pub enum Completion {
@@ -25,22 +19,22 @@ pub enum Completion {
 
 pub use Completion::*;
 
-impl<Key, Message> Room<Key, Message>
+impl<Key, PeerMessage> Room<Key, PeerMessage>
 where
     Key: Eq + std::hash::Hash + Clone,
-    Message: Clone,
+    PeerMessage: Clone,
 {
-    pub fn new() -> Room<Key, Message> {
+    pub fn new() -> Room<Key, PeerMessage> {
         Room {
             senders: RwLock::new(HashMap::new()),
         }
     }
 
-    pub fn broadcast(&self, msg: Message) {
+    pub fn broadcast(&self, msg: PeerMessage) {
         self.broadcast_to(|_| true, msg);
     }
 
-    pub fn broadcast_to<F>(&self, mut filter: F, msg: Message)
+    pub fn broadcast_to<F>(&self, mut filter: F, msg: PeerMessage)
     where
         F: FnMut(&Key) -> bool,
     {
@@ -56,7 +50,7 @@ where
         }
     }
 
-    pub fn send_to(&self, key: &Key, msg: Message) {
+    pub fn send_to(&self, key: &Key, msg: PeerMessage) {
         if let Some(stream) = self.senders.read().unwrap().get(key) {
             stream.unbounded_send(msg.clone()).unwrap();
         }
@@ -64,7 +58,7 @@ where
 
     pub fn send<F>(&self, mut message: F)
     where
-        F: FnMut(&Key) -> Option<Message>,
+        F: FnMut(&Key) -> Option<PeerMessage>,
     {
         let peers = self.senders.read().unwrap();
 
@@ -75,54 +69,57 @@ where
         }
     }
 
-    pub async fn enter<E, S, I, C>(
+    pub async fn enter<S, I, C, SocketTx, SocketRx>(
         &self,
         key: Key,
         stream: S,
         initial: I,
         mut callback: C,
-    ) -> (S, Result<(), E>)
+    ) -> S
     where
-        S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
+        S: Stream<Item = SocketRx> + Sink<SocketTx> + Unpin,
         I: FnOnce(),
-        C: FnMut(Message) -> Completion,
+        C: FnMut(&mut UnboundedSender<SocketTx>, Either<SocketRx, PeerMessage>) -> Completion,
     {
-        let (mut outgoing, mut incoming) = stream.split();
-        let (tx, rx) = unbounded();
-        self.senders.write().unwrap().insert(key.clone(), tx);
+        let (mut outgoing, incoming) = stream.split();
+        let (tx_for_others, mut rx_from_others) = unbounded();
+        self.senders
+            .write()
+            .unwrap()
+            .insert(key.clone(), tx_for_others);
+        let (mut to_sink, rx_to_sink) = unbounded();
+        let rx_to_sink = rx_to_sink.map(Ok);
 
-        let mut forward = rx.map(Ok);
-
-        let mut send_all = outgoing.send_all(&mut forward);
+        let mut sending_task = rx_to_sink.forward(&mut outgoing);
+        let mut incoming = incoming.fuse();
 
         initial();
 
-        let result: Result<(), E>;
-
         loop {
-            let selected = future::select(incoming.try_next(), send_all);
-            let (message, send_all_) = left(selected.await).unwrap();
-            send_all = send_all_;
-
-            match message {
-                Ok(Some(message)) => match callback(message) {
-                    Finished => {
-                        result = Ok(());
-                        break;
+            select! {
+                _ = sending_task => (),
+                x = rx_from_others.next() => {
+                    if let Some(message) = x {
+                        match callback(&mut to_sink, Either::Right(message)) {
+                            Continue => (),
+                            Finished => break,
+                        }
                     }
-                    _ => (),
-                },
-                Ok(None) => {}
-                Err(x) => {
-                    result = Err(x);
-                    break;
+                }
+                x = incoming.next() => {
+                    if let Some(message) = x {
+                        match callback(&mut to_sink, Either::Left(message)) {
+                            Continue => (),
+                            Finished => break,
+                        }
+                    }
                 }
             }
         }
 
         self.senders.write().unwrap().remove(&key);
 
-        (incoming.reunite(outgoing).unwrap(), result)
+        incoming.into_inner().reunite(outgoing).unwrap()
     }
 }
 

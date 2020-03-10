@@ -18,6 +18,7 @@ mod ready;
 pub enum State {
     Initial,
     Connecting(String),
+    ReadyToGetTable,
     AtTable(command::TableState),
     ReadyToPlay,
     Playing(game::Game),
@@ -62,7 +63,7 @@ impl GameComponent {
         self.console.log(&message);
         let state = match &mut self.state {
             State::Initial => None,
-            State::Connecting(_) | State::AtTable(_) => {
+            State::Connecting(_) | State::ReadyToGetTable | State::AtTable(_) => {
                 match from_str::<command::TableState>(&message) {
                     Ok(state) => {
                         if state.ready.iter().all(|(_, r)| *r) {
@@ -78,27 +79,30 @@ impl GameComponent {
                 Ok(game) => Some(State::Playing(game)),
                 Err(_) => None,
             },
-            State::Playing(game) => {
-                match from_str(&message) {
-                    Ok(command::PlayingResponse::Played(player, input)) => {
-                        self.console.log(&format!(
-                            "{} played: {:?}. {:?}",
-                            player,
-                            input.clone(),
-                            game.play(input)
-                        ));
-                    }
-                    Ok(command::PlayingResponse::Resigned(player)) => {
-                        panic!("Resignation by {}", player)
-                    }
-                    Ok(command::PlayingResponse::Error(error)) => {
-                        self.console.log(&format!("Error: {}", error))
-                    }
-                    Err(e) => self.console.log(&format!("{:?}", e)),
+            State::Playing(game) => match from_str(&message) {
+                Ok(command::PlayingResponse::BackToReady) => Some(State::ReadyToGetTable),
+                Ok(command::PlayingResponse::Played(player, input)) => {
+                    self.console.log(&format!(
+                        "{} played: {:?}. {:?}",
+                        player,
+                        input.clone(),
+                        game.play(input)
+                    ));
+                    None
                 }
-
-                None
-            }
+                Ok(command::PlayingResponse::Resigned(player)) => {
+                    panic!("Resignation by {}", player);
+                    None
+                }
+                Ok(command::PlayingResponse::Error(error)) => {
+                    self.console.log(&format!("Error: {}", error));
+                    None
+                }
+                Err(e) => {
+                    self.console.log(&format!("{:?}", e));
+                    None
+                }
+            },
         };
 
         if let Some(state) = state {
@@ -200,7 +204,7 @@ impl Component for GameComponent {
                          table=self.props.table.clone()
                          onsubmit=self.link.callback(|(server, table): (Server, String)| Msg::ConnectCommand(server, table)) />
             },
-            State::Connecting(_) => html! {
+            State::Connecting(_) | State::ReadyToGetTable => html! {
                 <div> { "Connecting" } </div>
             },
             State::AtTable(ts) => html! {

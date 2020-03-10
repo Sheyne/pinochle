@@ -1,4 +1,6 @@
 use futures::{
+    channel::mpsc::UnboundedSender,
+    future::Either,
     sink::Sink,
     stream::{Stream, TryStreamExt},
 };
@@ -59,6 +61,7 @@ where
 struct TableStateInternal {
     players: PlayerMap<Option<SocketAddr>>,
     ready: HashMap<SocketAddr, bool>,
+    game: Game,
 }
 
 enum TableStates {
@@ -68,9 +71,15 @@ enum TableStates {
 
 use TableStates::*;
 
+#[derive(Clone)]
+pub enum Signal {
+    Transmit(Message),
+    Leaving(SocketAddr),
+}
+
 pub struct Table {
     state: RwLock<TableStates>,
-    room: Room<SocketAddr, Message>,
+    room: Room<SocketAddr, Signal>,
 }
 
 impl TableStateInternal {
@@ -78,6 +87,7 @@ impl TableStateInternal {
         TableStateInternal {
             ready: HashMap::new(),
             players: PlayerMap::new(None, None, None, None),
+            game: Game::new(Player::A, shuffle()).into(),
         }
     }
 }
@@ -107,7 +117,7 @@ impl Table {
                 let response = PlayingResponse::Resigned(connected_player);
                 let message = to_string(&response).unwrap();
                 let message = Message::Text(message);
-                self.room.broadcast(message);
+                self.room.broadcast(Signal::Transmit(message));
 
                 Ok((Some(Lobby(Mutex::new(TableStateInternal::new()))), Finished))
             }
@@ -124,7 +134,7 @@ impl Table {
                 let response = PlayingResponse::Played(connected_player, game_input);
                 let message = to_string(&response).unwrap();
                 let message = Message::Text(message);
-                self.room.broadcast(message);
+                self.room.broadcast(Signal::Transmit(message));
 
                 Ok((None, Continue))
             }
@@ -167,8 +177,11 @@ impl Table {
                     _ => (),
                 }
 
-                self.room
-                    .send(|addr| Some(self.table_info(s.players.get_player(&Some(*addr)), &s)));
+                self.room.send(|addr| {
+                    Some(Signal::Transmit(
+                        self.table_info(s.players.get_player(&Some(*addr)), &s),
+                    ))
+                });
 
                 if s.players
                     .iter_all()
@@ -176,16 +189,17 @@ impl Table {
                     .all(|b| b)
                 {
                     println!("Starting playing");
-                    let game: Game = Game::new(Player::A, shuffle()).into();
                     self.room.send(|dest| {
                         if let Some(player) = s.players.get_player(&Some(*dest)) {
-                            let projected = game.project(player);
-                            Some(Message::Text(to_string(&projected).unwrap()))
+                            let projected = s.game.project(player);
+                            Some(Signal::Transmit(Message::Text(
+                                to_string(&projected).unwrap(),
+                            )))
                         } else {
                             None
                         }
                     });
-                    let s = Playing(s.players.clone().unwrap(), RwLock::new(game));
+                    let s = Playing(s.players.clone().unwrap(), RwLock::new(s.game.clone()));
 
                     (Some(s), Continue)
                 } else {
@@ -198,7 +212,7 @@ impl Table {
                     let response = PlayingResponse::Error(e);
                     let message = to_string(&response).unwrap();
                     let message = Message::Text(message);
-                    self.room.send_to(addr, message);
+                    self.room.send_to(addr, Signal::Transmit(message));
 
                     (None, Continue)
                 }
@@ -210,10 +224,28 @@ impl Table {
         completion
     }
 
-    fn main_loop(&self, addr: &SocketAddr, message: Message) -> Completion {
+    fn main_loop<E>(
+        &self,
+        addr: &SocketAddr,
+        out: &mut UnboundedSender<Message>,
+        message: Either<Result<Message, E>, Signal>,
+        err: &mut Result<(), E>,
+    ) -> Completion {
         match message {
-            Message::Text(message) => self.text(addr, message),
-            _ => Continue,
+            Either::Left(Ok(Message::Text(message))) => self.text(addr, message),
+            Either::Left(Ok(_)) => Continue,
+            Either::Left(Err(e)) => {
+                *err = Err(e);
+                Finished
+            }
+            Either::Right(Signal::Transmit(o)) => {
+                out.unbounded_send(o).unwrap();
+                Continue
+            }
+            Either::Right(Signal::Leaving(p)) => {
+                println!("{} hearing that {} is leaving", addr, p);
+                Continue
+            }
         }
     }
 
@@ -222,6 +254,8 @@ impl Table {
         S: Stream<Item = Result<Message, E>> + Sink<Message> + Unpin,
     {
         println!("Joining table {}", a);
+
+        let mut result = Ok(());
 
         let stream = self
             .room
@@ -238,15 +272,16 @@ impl Table {
                             *table_state.players.get_value_mut(player) = Some(a);
                         }
 
-                        self.room.send_to(&a, self.table_info(player, &table_state));
+                        self.room
+                            .send_to(&a, Signal::Transmit(self.table_info(player, &table_state)));
                     }
                     _ => {}
                 },
-                |m| self.main_loop(&a, m),
+                |out, m| self.main_loop(&a, out, m, &mut result),
             )
             .await;
 
-        match &*self.state.read().unwrap() {
+        let new_state = match &*self.state.read().unwrap() {
             Lobby(table_state) => {
                 let mut table_state = table_state.lock().unwrap();
 
@@ -258,16 +293,38 @@ impl Table {
                 }
 
                 self.room.send(|addr| {
-                    Some(
-                        self.table_info(table_state.players.get_player(&Some(*addr)), &table_state),
-                    )
+                    Some(Signal::Transmit(self.table_info(
+                        table_state.players.get_player(&Some(*addr)),
+                        &table_state,
+                    )))
                 });
+                None
             }
-            Playing(_player_map, _game) => {}
+            Playing(player_map, game) => {
+                self.room.broadcast(Signal::Leaving(a));
+                self.room.broadcast(Signal::Transmit(Message::Text(
+                    to_string(&PlayingResponse::BackToReady).unwrap(),
+                )));
+                let s = TableStateInternal {
+                    players: player_map.map(|_, v| if v != &a { Some(*v) } else { None }),
+                    ready: HashMap::new(),
+                    game: game.read().unwrap().clone(),
+                };
+                self.room.send(|addr| {
+                    Some(Signal::Transmit(
+                        self.table_info(s.players.get_player(&Some(*addr)), &s),
+                    ))
+                });
+                Some(Lobby(Mutex::new(s)))
+            }
+        };
+
+        if let Some(state) = new_state {
+            *self.state.write().unwrap() = state;
         }
 
         println!("Exiting {}", a);
 
-        stream
+        (stream, result)
     }
 }

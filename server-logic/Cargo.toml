@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-futures = "0.3"
+futures = { version = "0.3", features = [ "async-await" ] }
 tungstenite = { version = "0.10", default-features = false }
 pinochle-lib = { path = "../lib" }
 serde_json = "1.0"
