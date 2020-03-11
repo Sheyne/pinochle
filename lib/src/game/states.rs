@@ -66,7 +66,7 @@ pub type FinishedRound = Active<FinishedRoundState>;
 pub struct Active<T> {
     hands: PlayerMap<Vec<Option<Card>>>,
     scores: [usize; NUMBER_OF_TEAMS],
-    bids: Vec<usize>,
+    bids: Vec<Option<usize>>,
     turn: Player,
     initial_bidder: Player,
     state: T,
@@ -96,7 +96,7 @@ where
         &mut self.scores[team as usize]
     }
 
-    pub fn bids(&self) -> &[usize] {
+    pub fn bids(&self) -> &[Option<usize>] {
         &self.bids
     }
     pub fn turn(&self) -> Player {
@@ -141,16 +141,41 @@ impl Bidding {
         }
     }
 
-    pub fn bid(mut self, amount: usize) -> Either<Bidding, SelectingTrump> {
+    pub fn pass(self) -> Either<(Bidding, Option<&'static str>), SelectingTrump> {
+        self.do_bid(None)
+    }
+
+    pub fn bid(self, amount: usize) -> Either<(Bidding, Option<&'static str>), SelectingTrump> {
+        self.do_bid(Some(amount))
+    }
+
+    fn do_bid(
+        mut self,
+        amount: Option<usize>,
+    ) -> Either<(Bidding, Option<&'static str>), SelectingTrump> {
+        if let Some(amount) = amount {
+            let min_bid = 250;
+            if amount < min_bid {
+                return Either::Left((self, Some("Must bid be at least 250")));
+            }
+            if (amount - min_bid) % 25 != 0 {
+                return Either::Left((self, Some("Must bid in increments of 25")));
+            }
+            if self.bids.iter().any(|a| a.map_or(false, |a| a >= amount)) {
+                return Either::Left((self, Some("Bid must be higher than any bid")));
+            }
+        }
+
+        if amount.is_none() && self.bids.len() == 0 {
+            return Either::Left((self, Some("First bidder must not pass")));
+        }
+
         self.bids.push(amount);
         self.turn = self.turn.next();
 
         if self.bids.len() < NUMBER_OF_PLAYERS {
-            Either::Left(self)
+            Either::Left((self, None))
         } else {
-            let x: Vec<(&usize, Player)> = self.bids.iter().zip(self.turn).collect();
-            println!("{:?}", x);
-
             let (_, highest_bidder) = self
                 .bids
                 .iter()
@@ -260,6 +285,10 @@ impl Playing {
 }
 
 impl FinishedRound {
+    pub fn trump(&self) -> Suit {
+        self.state.trump
+    }
+
     pub fn taken(&self) -> [Vec<Card>; NUMBER_OF_TEAMS] {
         self.state.taken.clone()
     }
@@ -288,7 +317,7 @@ pub fn hands_to_option(hands: PlayerMap<Vec<Card>>) -> PlayerMap<Vec<Option<Card
 
 fn has_suit(hand: &[Option<Card>], suit: Suit) -> bool {
     hand.iter()
-        .map(|&card| card.map_or(true, |c| c.suit == suit))
+        .map(|&card| card.map_or(false, |c| c.suit == suit))
         .any(|b| b)
 }
 

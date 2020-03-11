@@ -26,14 +26,10 @@ impl Game {
         std::mem::swap(self, &mut input_state);
 
         let (next, err) = match (input_state, input) {
-            (Bidding(state), Bid(amount)) => (state.bid(amount).into(), Ok(())),
+            (Bidding(state), Bid(amount)) => next_and_error(state.bid(amount)),
+            (Bidding(state), Pass) => next_and_error(state.pass()),
             (SelectingTrump(state), SelectSuit(suit)) => (state.select(suit).into(), Ok(())),
-            (Playing(state), Play(card)) => match state.play(card) {
-                Either::Left((state, err)) => {
-                    (state.into(), err.map_or(Ok(()), |e| Err(e.to_owned())))
-                }
-                Either::Right(state) => (state.into(), Ok(())),
-            },
+            (Playing(state), Play(card)) => next_and_error(state.play(card)),
             (FinishedRound(state), Next) => (state.next().into(), Ok(())),
             (input_state, _) => (input_state, Err("".to_owned())),
         };
@@ -62,31 +58,31 @@ impl Game {
         }
     }
 
-    pub fn bidding(self) -> Option<states::Bidding> {
+    pub fn bidding(&self) -> Option<&states::Bidding> {
         match self {
             Bidding(x) => Some(x),
             _ => None,
         }
     }
-    pub fn selecting_trump(self) -> Option<states::SelectingTrump> {
+    pub fn selecting_trump(&self) -> Option<&states::SelectingTrump> {
         match self {
             SelectingTrump(x) => Some(x),
             _ => None,
         }
     }
-    pub fn playing(self) -> Option<states::Playing> {
+    pub fn playing(&self) -> Option<&states::Playing> {
         match self {
             Playing(x) => Some(x),
             _ => None,
         }
     }
-    pub fn finished(self) -> Option<()> {
+    pub fn finished(&self) -> Option<&()> {
         match self {
-            Finished => Some(()),
+            Finished => Some(&()),
             _ => None,
         }
     }
-    pub fn finished_round(self) -> Option<states::FinishedRound> {
+    pub fn finished_round(&self) -> Option<&states::FinishedRound> {
         match self {
             FinishedRound(x) => Some(x),
             _ => None,
@@ -109,9 +105,21 @@ impl states::Project for Game {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Input {
     Bid(usize),
+    Pass,
     SelectSuit(Suit),
     Play(Card),
     Next,
+}
+
+fn next_and_error<L, R>(s: Either<(L, Option<&str>), R>) -> (Game, Result<(), String>)
+where
+    L: Into<Game>,
+    R: Into<Game>,
+{
+    match s {
+        Either::Left((state, err)) => (state.into(), err.map_or(Ok(()), |e| Err(e.to_owned()))),
+        Either::Right(state) => (state.into(), Ok(())),
+    }
 }
 
 impl<T, U> From<Either<T, U>> for Game

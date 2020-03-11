@@ -36,3 +36,8 @@
 #play-area .suit-spade, #play-area .suit-club, #hand .playable.suit-spade, #hand .playable.suit-club {
     color: black;
 }
+
+.error {
+    background: pink;
+    padding: 1em;
+}

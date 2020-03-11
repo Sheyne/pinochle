@@ -1,12 +1,13 @@
 use super::game::{
     core::{Player, PlayerMap},
-    Input,
+    Game, Input,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PlayingResponse {
     Played(Player, Input),
+    State(Game),
     Resigned(Player),
     BackToReady,
     Error(String),

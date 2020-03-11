@@ -6,7 +6,7 @@ use futures::{
 };
 use pinochle_lib::{
     command::{Command, PlayingInput, PlayingResponse, TableCommand, TableState},
-    game::{states::Project, Game},
+    game::{self, states::Project, Game},
     shuffle, Player, PlayerMap,
 };
 pub use room::*;
@@ -131,12 +131,21 @@ impl Table {
                     }
                 }
 
-                let response = PlayingResponse::Played(connected_player, game_input);
-                let message = to_string(&response).unwrap();
-                let message = Message::Text(message);
-                self.room.broadcast(Signal::Transmit(message));
+                match game_input {
+                    game::Input::Next => {
+                        self.send_full_state(&game.read().unwrap(), player_map);
 
-                Ok((None, Continue))
+                        Ok((None, Continue))
+                    }
+                    _ => {
+                        let response = PlayingResponse::Played(connected_player, game_input);
+                        let message = to_string(&response).unwrap();
+                        let message = Message::Text(message);
+                        self.room.broadcast(Signal::Transmit(message));
+
+                        Ok((None, Continue))
+                    }
+                }
             }
         }
     }
@@ -189,17 +198,11 @@ impl Table {
                     .all(|b| b)
                 {
                     println!("Starting playing");
-                    self.room.send(|dest| {
-                        if let Some(player) = s.players.get_player(&Some(*dest)) {
-                            let projected = s.game.project(player);
-                            Some(Signal::Transmit(Message::Text(
-                                to_string(&projected).unwrap(),
-                            )))
-                        } else {
-                            None
-                        }
-                    });
-                    let s = Playing(s.players.clone().unwrap(), RwLock::new(s.game.clone()));
+
+                    let map = s.players.clone().unwrap();
+                    self.send_full_state(&s.game, &map);
+
+                    let s = Playing(map, RwLock::new(s.game.clone()));
 
                     (Some(s), Continue)
                 } else {
@@ -222,6 +225,19 @@ impl Table {
             *self.state.write().unwrap() = new_state;
         }
         completion
+    }
+
+    fn send_full_state(&self, game: &Game, players: &PlayerMap<SocketAddr>) {
+        self.room.send(|dest| {
+            if let Some(player) = players.get_player(dest) {
+                let projected = game.project(player);
+                Some(Signal::Transmit(Message::Text(
+                    to_string(&PlayingResponse::State(projected)).unwrap(),
+                )))
+            } else {
+                None
+            }
+        });
     }
 
     fn main_loop<E>(

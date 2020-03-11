@@ -1,7 +1,7 @@
 use anyhow::Error;
 use connect::Connect;
 pub use connect::Server;
-use pinochle_lib::{command, game};
+use pinochle_lib::{command, game, Player};
 use playing::Playing;
 use ready::Ready;
 use serde::Serialize;
@@ -20,8 +20,8 @@ pub enum State {
     Connecting(String),
     ReadyToGetTable,
     AtTable(command::TableState),
-    ReadyToPlay,
-    Playing(game::Game),
+    ReadyToPlay(Player),
+    Playing(Player, game::Game),
 }
 
 pub struct GameComponent {
@@ -31,6 +31,7 @@ pub struct GameComponent {
     link: ComponentLink<GameComponent>,
 
     state: State,
+    last_error: Option<String>,
     props: Props,
 }
 
@@ -61,13 +62,14 @@ impl GameComponent {
 
     fn got_message(&mut self, message: String) -> bool {
         self.console.log(&message);
+        self.last_error = None;
         let state = match &mut self.state {
             State::Initial => None,
             State::Connecting(_) | State::ReadyToGetTable | State::AtTable(_) => {
                 match from_str::<command::TableState>(&message) {
                     Ok(state) => {
                         if state.ready.iter().all(|(_, r)| *r) {
-                            Some(State::ReadyToPlay)
+                            state.player.map(State::ReadyToPlay)
                         } else {
                             Some(State::AtTable(state))
                         }
@@ -75,15 +77,26 @@ impl GameComponent {
                     _ => None,
                 }
             }
-            State::ReadyToPlay => match from_str(&message) {
-                Ok(game) => Some(State::Playing(game)),
-                Err(_) => None,
+            State::ReadyToPlay(player) => match from_str(&message) {
+                Ok(command::PlayingResponse::State(game)) => Some(State::Playing(*player, game)),
+                Ok(a) => {
+                    self.console.log(&format!("Incorrect response: {:?}", a));
+                    None
+                }
+                Err(e) => {
+                    self.console.log(&format!("Error: {}", e));
+                    None
+                }
             },
-            State::Playing(game) => match from_str(&message) {
+            State::Playing(this_player, game) => match from_str(&message) {
+                Ok(command::PlayingResponse::State(game)) => {
+                    Some(State::Playing(*this_player, game))
+                }
                 Ok(command::PlayingResponse::BackToReady) => Some(State::ReadyToGetTable),
                 Ok(command::PlayingResponse::Played(player, input)) => {
                     self.console.log(&format!(
-                        "{} played: {:?}. {:?}",
+                        "{} thinks {} played: {:?}. {:?}",
+                        this_player,
                         player,
                         input.clone(),
                         game.play(input)
@@ -91,11 +104,12 @@ impl GameComponent {
                     None
                 }
                 Ok(command::PlayingResponse::Resigned(player)) => {
-                    panic!("Resignation by {}", player);
+                    println!("Resignation by {}", player);
                     None
                 }
                 Ok(command::PlayingResponse::Error(error)) => {
                     self.console.log(&format!("Error: {}", error));
+                    self.last_error = Some(error);
                     None
                 }
                 Err(e) => {
@@ -126,6 +140,7 @@ impl Component for GameComponent {
 
             props: props,
             state: State::Initial,
+            last_error: None,
         }
     }
 
@@ -210,12 +225,24 @@ impl Component for GameComponent {
             State::AtTable(ts) => html! {
                 <Ready state=ts ontablecommand=self.link.callback(|c: command::TableCommand| Msg::TableCommand(c)) />
             },
-            State::ReadyToPlay => html! {
+            State::ReadyToPlay(_) => html! {
                 <div> { "Ready to play" } </div>
             },
-            State::Playing(game) => html! {
-                <Playing game=game ondo=self.link.callback(|d| Msg::Do(d)) />
-            },
+            State::Playing(player, game) => {
+                let last_error = if let Some(e) = &self.last_error {
+                    html! {
+                        <div class="error"> { &e } </div>
+                    }
+                } else {
+                    html! { "" }
+                };
+                html! {
+                    <div>
+                        <Playing game=game player=player ondo=self.link.callback(|d| Msg::Do(d)) />
+                        { last_error }
+                    </div>
+                }
+            }
         }
     }
 }
