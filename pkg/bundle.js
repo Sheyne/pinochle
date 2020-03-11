@@ -626,7 +626,7 @@
     }
 
     async function main() {
-       await init('/pkg/pinochle_client_bg.wasm');
+       await init('pkg/pinochle_client_bg.wasm');
        run_app();
     }
     main();
