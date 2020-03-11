@@ -1,0 +1,43 @@
+.card {
+    display: inline-block;
+    width: 2em;
+    height: 3em;
+    border: 0.1em solid grey;
+    border-radius: .5em;
+    margin: .2em;
+    padding: .2em;
+}
+
+.active-player .card:hover {
+    background-color: #fafafa;
+}
+
+.active-player .card:active {
+    background-color: #f0f0f0;
+}
+
+
+.active-player #hand .card {
+    cursor: pointer;
+}
+
+.suit-heart, .suit-diamond {
+    color: pink;
+}
+
+.suit-spade, .suit-club {
+    color: grey;
+}
+
+#play-area .suit-heart, #play-area .suit-diamond, #hand .playable.suit-heart, #hand .playable.suit-diamond {
+    color: red;
+}
+
+#play-area .suit-spade, #play-area .suit-club, #hand .playable.suit-spade, #hand .playable.suit-club {
+    color: black;
+}
+
+.error {
+    background: pink;
+    padding: 1em;
+}
