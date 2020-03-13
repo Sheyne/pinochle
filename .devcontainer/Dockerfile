@@ -55,7 +55,7 @@ ADD server/ server/
 ADD server-logic/ server-logic/
 RUN cd client && wasm-pack build --target web && rollup ./main.js --format iife --file ./pkg/bundle.js
 RUN cd lib && cargo build
-RUN cd server-lib && cargo build
+RUN cd server-logic && cargo build
 RUN cd server && cargo build
 
 FROM Stage1
