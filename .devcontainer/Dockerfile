@@ -42,5 +42,11 @@ RUN apt-get update \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p /build/pinochle && mkdir .cargo && cat 'build.target-dir = "/build/pinochle"' > .cargo/config 
+RUN cd client && wasm-pack build --target web && rollup ./main.js --format iife --file ./pkg/bundle.js
+RUN cd lib && cargo build
+RUN cd server-lib && cargo build
+RUN cd server && cargo build
+
 # Switch back to dialog for any ad-hoc use of apt-get
 ENV DEBIAN_FRONTEND=dialog
