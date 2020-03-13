@@ -1,4 +1,4 @@
-FROM rust:latest
+FROM rust:latest as Stage1
 
 # This Dockerfile adds a non-root user with sudo access. Use the "remoteUser"
 # property in devcontainer.json to use it. On Linux, the container user's GID/UIDs
@@ -41,12 +41,22 @@ RUN apt-get update \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+# Switch back to dialog for any ad-hoc use of apt-get
+ENV DEBIAN_FRONTEND=dialog
+# Switch back to dialog for any ad-hoc use of apt-get
+ENV DEBIAN_FRONTEND=dialog
 
-RUN mkdir -p /build/pinochle && mkdir .cargo && cat 'build.target-dir = "/build/pinochle"' > .cargo/config 
+FROM Stage1 AS Stage2
+
+RUN mkdir -p /build/pinochle && mkdir .cargo && echo 'build.target-dir = "/build/pinochle"' > .cargo/config 
+ADD client/ client/
+ADD lib/ lib/
+ADD server/ server/
+ADD server-logic/ server-logic/
 RUN cd client && wasm-pack build --target web && rollup ./main.js --format iife --file ./pkg/bundle.js
 RUN cd lib && cargo build
 RUN cd server-lib && cargo build
 RUN cd server && cargo build
 
-# Switch back to dialog for any ad-hoc use of apt-get
-ENV DEBIAN_FRONTEND=dialog
+FROM Stage1
+COPY --from=Stage2 /build/pinochle /build/pinochle
