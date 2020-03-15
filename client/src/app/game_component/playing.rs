@@ -7,7 +7,6 @@ use yew::callback::Callback;
 use yew::events::InputData;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
-use yew::services::ConsoleService;
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
@@ -23,7 +22,6 @@ pub struct Data {
 pub struct Playing {
     props: Props,
     link: ComponentLink<Self>,
-    console: ConsoleService,
 
     data: Data,
 }
@@ -46,7 +44,6 @@ impl Component for Playing {
         Self {
             props,
             link,
-            console: ConsoleService::new(),
             data: Data { bid: None },
         }
     }
@@ -95,7 +92,7 @@ impl Component for Playing {
 impl Playing {
     fn input(&self) -> Html {
         match &self.props.game {
-            Game::Bidding(state) => html! {
+            Game::Bidding(_) => html! {
                 <div>
                     <label for="bid"> { "Bid: " } </label>
                     <input id="bid" type="text" oninput=self.link.callback(|f: InputData|
@@ -104,7 +101,7 @@ impl Playing {
                         <input type="button" value="Pass" onclick=self.link.callback(|_| Msg::Pass) />
                     </div>
             },
-            Game::SelectingTrump(state) => html! {
+            Game::SelectingTrump(_) => html! {
                 <div>
                     <input type="button" value="Diamonds" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Diamond)) />
                     <input type="button" value="Clubs" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Club)) />
@@ -112,8 +109,8 @@ impl Playing {
                     <input type="button" value="Spades" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Spade)) />
                 </div>
             },
-            Game::Playing(state) => self.show_play_area(),
-            Game::FinishedRound(state) => html! {
+            Game::Playing(_) => self.show_play_area(),
+            Game::FinishedRound(_) => html! {
                 <input type="button" value="Next" onclick=self.link.callback(|_| Msg::Next) />
             },
             Game::Finished => html! {
