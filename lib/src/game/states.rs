@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-pub struct BiddingState;
+pub struct BiddingState(Player);
 
 impl Project for BiddingState {
     fn project(&self, _: Player) -> Self {
-        BiddingState
+        Self(self.0)
     }
 }
 
@@ -27,11 +27,13 @@ pub struct PlayingState {
     pub play_area: Vec<Card>,
     pub taken: [Vec<Card>; NUMBER_OF_TEAMS],
     pub trump: Suit,
+    turn: Player,
 }
 
 impl Project for PlayingState {
     fn project(&self, _: Player) -> Self {
         Self {
+            turn: self.turn,
             play_area: self.play_area.clone(),
             taken: self.taken.clone(),
             trump: self.trump.clone(),
@@ -67,7 +69,6 @@ pub struct Active<T> {
     hands: PlayerMap<Vec<Option<Card>>>,
     scores: [usize; NUMBER_OF_TEAMS],
     bids: Vec<Option<usize>>,
-    turn: Player,
     initial_bidder: Player,
     state: T,
 }
@@ -99,9 +100,6 @@ where
     pub fn bids(&self) -> &[Option<usize>] {
         &self.bids
     }
-    pub fn turn(&self) -> Player {
-        self.turn
-    }
     pub fn initial_bidder(&self) -> Player {
         self.initial_bidder
     }
@@ -122,7 +120,6 @@ where
             }),
             scores: self.scores.clone(),
             bids: self.bids.clone(),
-            turn: self.turn.clone(),
             initial_bidder: self.initial_bidder,
             state: self.state.project(player),
         }
@@ -135,9 +132,8 @@ impl Bidding {
             hands: hands,
             bids: Vec::new(),
             scores: [0, 0],
-            turn: first_player,
             initial_bidder: first_player,
-            state: BiddingState,
+            state: BiddingState(first_player),
         }
     }
 
@@ -147,6 +143,10 @@ impl Bidding {
 
     pub fn bid(self, amount: usize) -> Either<(Bidding, Option<&'static str>), SelectingTrump> {
         self.do_bid(Some(amount))
+    }
+
+    pub fn turn(&self) -> Player {
+        self.state.0
     }
 
     fn do_bid(
@@ -171,7 +171,7 @@ impl Bidding {
         }
 
         self.bids.push(amount);
-        self.turn = self.turn.next();
+        self.state.0 = self.state.0.next();
 
         if self.bids.len() < NUMBER_OF_PLAYERS {
             Either::Left((self, None))
@@ -179,13 +179,12 @@ impl Bidding {
             let (_, highest_bidder) = self
                 .bids
                 .iter()
-                .zip(self.turn)
+                .zip(self.state.0)
                 .max_by_key(|(bid, _)| *bid)
                 .unwrap();
 
             Either::Right(Active {
                 scores: self.scores,
-                turn: highest_bidder,
                 initial_bidder: self.initial_bidder,
                 bids: self.bids,
                 hands: self.hands,
@@ -196,14 +195,18 @@ impl Bidding {
 }
 
 impl SelectingTrump {
+    pub fn turn(&self) -> Player {
+        self.state.0
+    }
+
     pub fn select(self, suit: Suit) -> Playing {
         Active {
             scores: self.scores,
-            turn: self.state.0,
             bids: self.bids,
             hands: self.hands,
             initial_bidder: self.initial_bidder,
             state: PlayingState {
+                turn: self.state.0,
                 play_area: Vec::new(),
                 taken: [Vec::new(), Vec::new()],
                 trump: suit,
@@ -221,8 +224,12 @@ impl Playing {
         self.state.trump
     }
 
+    pub fn turn(&self) -> Player {
+        self.state.turn
+    }
+
     pub fn play(mut self, card: Card) -> Either<(Playing, Option<&'static str>), FinishedRound> {
-        let hand = self.hand(self.turn);
+        let hand = self.hand(self.state.turn);
 
         match is_legal(&self.state.play_area, hand, &card, self.state.trump) {
             Ok(_) => (),
@@ -230,17 +237,17 @@ impl Playing {
         }
 
         if let Some(position) = hand.iter().position(|&x| x.map_or(false, |x| x == card)) {
-            self.hand_mut(self.turn).remove(position);
+            self.hand_mut(self.state.turn).remove(position);
         } else if let Some(position) = hand.iter().position(|&x| x.is_none()) {
-            self.hand_mut(self.turn).remove(position);
+            self.hand_mut(self.state.turn).remove(position);
         } else {
             return Either::Left((self, Some("Card not in hand")));
         }
         self.state.play_area.push(card);
-        self.turn = self.turn.next();
+        self.state.turn = self.state.turn.next();
 
         if self.state.play_area.len() == NUMBER_OF_PLAYERS {
-            let first_player = self.turn;
+            let first_player = self.state.turn;
             let led_suit = self.state.play_area[0].suit;
 
             let mut iter = self.state.play_area.iter().zip(first_player);
@@ -258,7 +265,7 @@ impl Playing {
             self.state.taken[winner.team() as usize].extend(self.state.play_area.iter());
             self.state.play_area.clear();
 
-            self.turn = winner;
+            self.state.turn = winner;
 
             if self.hand(Player::A).len() == 0 {
                 return Either::Right(self.calculate_score());
@@ -272,7 +279,6 @@ impl Playing {
 
         Active {
             hands: self.hands,
-            turn: self.turn,
             initial_bidder: self.initial_bidder,
             scores: self.scores,
             bids: self.bids,
@@ -299,13 +305,13 @@ impl FinishedRound {
         if *self.scores.iter().max().unwrap() > 2000 {
             Either::Right(Finished(self.scores))
         } else {
+            let initial_bidder = self.initial_bidder.next();
             Either::Left(Active {
-                turn: Player::A,
-                initial_bidder: self.initial_bidder.next(),
+                initial_bidder: initial_bidder,
                 hands: hands_to_option(shuffle()),
                 bids: self.bids,
                 scores: self.scores,
-                state: BiddingState,
+                state: BiddingState(initial_bidder),
             })
         }
     }
@@ -402,14 +408,13 @@ mod test {
                 vec![Some(HA)],
             ),
         );
-        let game = game.bid(210);
-        let game = game.left().unwrap().bid(210);
-        let game = game.left().unwrap().bid(220);
-        let game = game.left().unwrap().bid(210);
-        let game = game.right().unwrap();
-        assert_eq!(game.turn, Player::C);
+        let (game, _) = game.bid(250).left().unwrap();
+        let (game, _) = game.pass().left().unwrap();
+        let (game, _) = game.bid(300).left().unwrap();
+        let game = game.pass().right().unwrap();
+        assert_eq!(game.turn(), Player::C);
         let game = game.select(Suit::Heart);
-        assert_eq!(game.turn, Player::C);
+        assert_eq!(game.turn(), Player::C);
         let (game, _) = game.play(HX).left().unwrap();
         let (game, _) = game.play(HA).left().unwrap();
         let (game, _) = game.play(HX).left().unwrap();

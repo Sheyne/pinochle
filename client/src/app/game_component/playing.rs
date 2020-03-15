@@ -159,7 +159,7 @@ impl Playing {
 
     fn show_hand(&self, player: Player) -> Html {
         let game = &self.props.game;
-        let is_current = game.turn().map_or(false, |p| p == player);
+        let is_current = game.can_play(player);
 
         let play_area = game.playing().map(|s| s.play_area().clone());
         let hand = game.hand(player);

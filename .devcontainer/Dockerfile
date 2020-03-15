@@ -57,6 +57,7 @@ RUN cd client && wasm-pack build --target web && rollup ./main.js --format iife 
 RUN cd lib && cargo build
 RUN cd server-logic && cargo build
 RUN cd server && cargo build
+RUN chown -R $USERNAME:$USERNAME /build
 
 FROM Stage1
 COPY --from=Stage2 /build/pinochle /build/pinochle

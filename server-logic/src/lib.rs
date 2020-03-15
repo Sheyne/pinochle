@@ -124,11 +124,7 @@ impl Table {
             PlayingInput::Play(game_input) => {
                 {
                     let mut game = game.write().unwrap();
-                    if game.turn().map_or(false, |p| p == connected_player) {
-                        game.play(game_input.clone())?
-                    } else {
-                        Err("Not your turn".to_owned())?
-                    }
+                    game.play(connected_player, game_input.clone())?
                 }
 
                 match game_input {

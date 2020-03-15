@@ -19,8 +19,12 @@ impl Game {
         states::Bidding::new(first_player, states::hands_to_option(hands)).into()
     }
 
-    pub fn play(&mut self, input: Input) -> Result<(), String> {
+    pub fn play(&mut self, player: Player, input: Input) -> Result<(), String> {
         use Input::*;
+
+        if !self.can_play(player) {
+            Err("Not your turn".to_owned())?
+        }
 
         let mut input_state = Game::Finished;
         std::mem::swap(self, &mut input_state);
@@ -48,13 +52,13 @@ impl Game {
         }
     }
 
-    pub fn turn(&self) -> Option<Player> {
+    pub fn can_play(&self, player: Player) -> bool {
         match self {
-            Bidding(b) => Some(b.turn()),
-            SelectingTrump(b) => Some(b.turn()),
-            Playing(b) => Some(b.turn()),
-            FinishedRound(b) => Some(b.turn()),
-            Finished => None,
+            Bidding(b) => b.turn() == player,
+            SelectingTrump(b) => b.turn() == player,
+            Playing(b) => b.turn() == player,
+            FinishedRound(_) => true,
+            Finished => false,
         }
     }
 
@@ -183,20 +187,20 @@ mod tests {
         let hands = PlayerMap::new(vec![HX], vec![HX], vec![HX], vec![HA]);
 
         let mut game = Game::new(Player::A, hands);
-        game.play(Input::Bid(210))?;
-        game.play(Input::Bid(210))?;
-        game.play(Input::Bid(220))?;
-        game.play(Input::Bid(210))?;
-        assert_eq!(game.turn(), Some(Player::C));
+        game.play(Input::Bid(250))?;
+        game.play(Input::Pass)?;
+        game.play(Input::Bid(275))?;
+        game.play(Input::Pass)?;
+        assert!(game.can_play(Player::C));
         game.play(Input::SelectSuit(Suit::Heart))?;
-        assert_eq!(game.turn(), Some(Player::C));
+        assert!(game.can_play(Player::C));
         game.play(Input::Play(HX))?;
         game.play(Input::Play(HA))?;
         game.play(Input::Play(HX))?;
         game.play(Input::Play(HX))?;
-        let game = game.finished_round().unwrap();
-        assert_eq!(game.taken(), [vec![], vec![HX, HA, HX, HX]]);
-        game.next();
+        let finished_round = game.finished_round().unwrap();
+        assert_eq!(finished_round.taken(), [vec![], vec![HX, HA, HX, HX]]);
+        game.play(Input::Next)?;
         Ok(())
     }
 }

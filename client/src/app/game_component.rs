@@ -99,7 +99,7 @@ impl GameComponent {
                         this_player,
                         player,
                         input.clone(),
-                        game.play(input)
+                        game.play(player, input)
                     ));
                     None
                 }
