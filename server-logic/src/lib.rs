@@ -134,10 +134,22 @@ impl Table {
                         Ok((None, Continue))
                     }
                     _ => {
-                        let response = PlayingResponse::Played(connected_player, game_input);
-                        let message = to_string(&response).unwrap();
-                        let message = Message::Text(message);
-                        self.room.broadcast(Signal::Transmit(message));
+                        self.room.send(|recipient| {
+                            if let Some(recipient) = player_map.get_player(recipient) {
+                                let input = if recipient.team() == connected_player.team() {
+                                    game_input.clone()
+                                } else {
+                                    game_input.mask()
+                                };
+
+                                let response = PlayingResponse::Played(connected_player, input);
+                                let message = to_string(&response).unwrap();
+                                let message = Message::Text(message);
+                                Some(Signal::Transmit(message))
+                            } else {
+                                None
+                            }
+                        });
 
                         Ok((None, Continue))
                     }
