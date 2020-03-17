@@ -136,6 +136,15 @@ pub enum Player {
 }
 
 impl Player {
+    pub fn teammate(self) -> Player {
+        match self {
+            Player::A => Player::C,
+            Player::B => Player::D,
+            Player::C => Player::A,
+            Player::D => Player::B,
+        }
+    }
+
     pub fn team(self) -> Team {
         match self {
             Player::A => Team::Red,

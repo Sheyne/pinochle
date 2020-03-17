@@ -2,6 +2,7 @@ use super::core::*;
 use either::Either;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::iter;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct BiddingState(Player);
@@ -19,6 +20,36 @@ impl Project for SelectingTrumpState {
     fn project(&self, _: Player) -> Self {
         let SelectingTrumpState(a) = self;
         SelectingTrumpState(*a)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct PassingCardsState {
+    turn: Player,
+    trump: Suit,
+}
+
+impl Project for PassingCardsState {
+    fn project(&self, _: Player) -> Self {
+        Self {
+            turn: self.turn,
+            trump: self.trump,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct ReturningCardsState {
+    turn: Player,
+    trump: Suit,
+}
+
+impl Project for ReturningCardsState {
+    fn project(&self, _: Player) -> Self {
+        Self {
+            turn: self.turn,
+            trump: self.trump,
+        }
     }
 }
 
@@ -61,6 +92,8 @@ pub struct Finished([usize; NUMBER_OF_TEAMS]);
 
 pub type Bidding = Active<BiddingState>;
 pub type SelectingTrump = Active<SelectingTrumpState>;
+pub type PassingCards = Active<PassingCardsState>;
+pub type ReturningCards = Active<ReturningCardsState>;
 pub type Playing = Active<PlayingState>;
 pub type FinishedRound = Active<FinishedRoundState>;
 
@@ -199,19 +232,138 @@ impl SelectingTrump {
         self.state.0
     }
 
-    pub fn select(self, suit: Suit) -> Playing {
+    pub fn select(self, suit: Suit) -> PassingCards {
         Active {
             scores: self.scores,
             bids: self.bids,
             hands: self.hands,
             initial_bidder: self.initial_bidder,
-            state: PlayingState {
-                turn: self.state.0,
-                play_area: Vec::new(),
-                taken: [Vec::new(), Vec::new()],
+            state: PassingCardsState {
+                turn: self.state.0.teammate(),
                 trump: suit,
             },
         }
+    }
+}
+
+fn remove_item<T, F>(vec: &mut Vec<T>, mut f: F) -> bool
+where
+    F: FnMut(&T) -> bool,
+{
+    if let Some((index, _)) = vec.iter().enumerate().filter(|(_, c)| f(c)).next() {
+        vec.remove(index);
+        true
+    } else {
+        false
+    }
+}
+
+fn pass_cards(
+    mut hand1: Vec<Option<Card>>,
+    mut hand2: Vec<Option<Card>>,
+    cards: Option<[Card; 4]>,
+) -> Result<(Vec<Option<Card>>, Vec<Option<Card>>), String> {
+    if let Some(cards) = cards {
+        for card in cards.iter() {
+            // first try to remove the known card from hand
+            // if the known card is not in hand, try to remove some
+            // unknown card
+            if !remove_item(&mut hand1, |c| c.map_or(false, |c| &c == card))
+                && !remove_item(&mut hand1, |c| c.is_none())
+            {
+                return Err("Card not in hand to pass".to_owned());
+            }
+        }
+    } else {
+        // if the passed cards aren't known, remove 4 unknown cards from the hand
+        for _ in 0..4 {
+            if !remove_item(&mut hand1, |c| c.is_none()) {
+                return Err("Card not in hand to pass".to_owned());
+            }
+        }
+    }
+
+    // add the cards to the other hand
+    if let Some(cards) = cards {
+        hand2.extend(cards.iter().map(|x| Some(*x)));
+    } else {
+        hand2.extend(iter::repeat(None).take(4));
+    }
+
+    Ok((hand1, hand2))
+}
+
+impl PassingCards {
+    pub fn turn(&self) -> Player {
+        self.state.turn
+    }
+
+    pub fn trump(&self) -> Suit {
+        self.state.trump
+    }
+
+    pub fn pass(self, cards: Option<[Card; 4]>) -> Result<ReturningCards, String> {
+        let src = self.turn();
+        let dst = src.teammate();
+
+        let mut hands = self.hands;
+
+        let (new_src, new_dst) = pass_cards(
+            hands.get_value(src).clone(),
+            hands.get_value(dst).clone(),
+            cards,
+        )?;
+        *hands.get_value_mut(src) = new_src;
+        *hands.get_value_mut(dst) = new_dst;
+
+        Ok(Active {
+            scores: self.scores,
+            bids: self.bids,
+            hands: hands,
+            initial_bidder: self.initial_bidder,
+            state: ReturningCardsState {
+                turn: self.state.turn.teammate(),
+                trump: self.state.trump,
+            },
+        })
+    }
+}
+
+impl ReturningCards {
+    pub fn turn(&self) -> Player {
+        self.state.turn
+    }
+
+    pub fn trump(&self) -> Suit {
+        self.state.trump
+    }
+
+    pub fn pass(self, cards: Option<[Card; 4]>) -> Result<Playing, String> {
+        let src = self.turn();
+        let dst = src.teammate();
+
+        let mut hands = self.hands;
+
+        let (new_src, new_dst) = pass_cards(
+            hands.get_value(src).clone(),
+            hands.get_value(dst).clone(),
+            cards,
+        )?;
+        *hands.get_value_mut(src) = new_src;
+        *hands.get_value_mut(dst) = new_dst;
+
+        Ok(Active {
+            scores: self.scores,
+            bids: self.bids,
+            hands: hands,
+            initial_bidder: self.initial_bidder,
+            state: PlayingState {
+                turn: self.state.turn,
+                play_area: Vec::new(),
+                taken: [Vec::new(), Vec::new()],
+                trump: self.state.trump,
+            },
+        })
     }
 }
 
@@ -250,10 +402,9 @@ impl Playing {
             let first_player = self.state.turn;
             let led_suit = self.state.play_area[0].suit;
 
-            let mut iter = self.state.play_area.iter().zip(first_player);
-
             // regular rust max_by returns the last winner when
             // deciding ties. This returns the first
+            let mut iter = self.state.play_area.iter().zip(first_player);
             let (mut card, mut winner) = iter.next().unwrap();
             for (c, p) in iter {
                 if compare_cards(c, card, &led_suit, &self.state.trump) == Ordering::Greater {
@@ -387,25 +538,20 @@ fn compare_cards(c1: &Card, c2: &Card, led_suit: &Suit, trump_suit: &Suit) -> Or
 mod test {
     use super::*;
 
-    const HA: Card = Card {
-        suit: Suit::Heart,
-        rank: Rank::Ace,
-    };
-
     const HX: Card = Card {
         suit: Suit::Heart,
         rank: Rank::Ten,
     };
 
     #[test]
-    fn simple_round() {
+    fn simple_round() -> Result<(), String> {
         let game = Bidding::new(
             Player::A,
             PlayerMap::new(
-                vec![Some(HX)],
-                vec![Some(HX)],
-                vec![Some(HX)],
-                vec![Some(HA)],
+                vec![Some(HX), Some(HX), Some(HX), Some(HX)],
+                vec![Some(HX), Some(HX), Some(HX), Some(HX)],
+                vec![Some(HX), Some(HX), Some(HX), Some(HX)],
+                vec![Some(HX), Some(HX), Some(HX), Some(HX)],
             ),
         );
         let (game, _) = game.bid(250).left().unwrap();
@@ -414,13 +560,37 @@ mod test {
         let game = game.pass().right().unwrap();
         assert_eq!(game.turn(), Player::C);
         let game = game.select(Suit::Heart);
+        assert_eq!(game.turn(), Player::A);
+        let game = game.pass(Some([HX, HX, HX, HX]))?;
+        assert_eq!(game.turn(), Player::C);
+        let game = game.pass(Some([HX, HX, HX, HX]))?;
         assert_eq!(game.turn(), Player::C);
         let (game, _) = game.play(HX).left().unwrap();
-        let (game, _) = game.play(HA).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
+        let (game, _) = game.play(HX).left().unwrap();
         let (game, _) = game.play(HX).left().unwrap();
         let game = game.play(HX).right().unwrap();
-        assert_eq!(game.state.taken, [vec![], vec![HX, HA, HX, HX]]);
+        assert_eq!(
+            game.state.taken,
+            [
+                vec![HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX,],
+                vec![],
+            ]
+        );
         let game = game.next();
         game.left().unwrap();
+
+        Ok(())
     }
 }

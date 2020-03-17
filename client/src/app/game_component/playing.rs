@@ -109,6 +109,12 @@ impl Playing {
                     <input type="button" value="Spades" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Spade)) />
                 </div>
             },
+            Game::PassingCards(_) => html! {
+                "Passing"
+            },
+            Game::ReturningCards(_) => html! {
+                "Returning"
+            },
             Game::Playing(_) => self.show_play_area(),
             Game::FinishedRound(_) => html! {
                 <input type="button" value="Next" onclick=self.link.callback(|_| Msg::Next) />
@@ -163,6 +169,8 @@ impl Playing {
         let trump = match game {
             Game::Playing(s) => Some(s.trump()),
             Game::FinishedRound(s) => Some(s.trump()),
+            Game::PassingCards(s) => Some(s.trump()),
+            Game::ReturningCards(s) => Some(s.trump()),
             Game::Bidding(_) | Game::Finished | Game::SelectingTrump(_) => None,
         };
 
