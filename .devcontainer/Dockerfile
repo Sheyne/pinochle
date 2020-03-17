@@ -25,8 +25,10 @@ RUN apt-get update \
     && rustup update \
     && rustup component add rls rust-analysis rust-src rustfmt clippy \
     && rustup target add wasm32-unknown-unknown \
+    && rustup toolchain install nightly \
     && apt-get -y install npm \
     && npm install --global rollup \
+    && cargo install cargo-outdated cargo-udeps \
     && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh \
     #
     # Create a non-root user to use if preferred - see https://aka.ms/vscode-remote/containers/non-root-user.
@@ -60,4 +62,5 @@ RUN cd server && cargo build
 RUN chown -R $USERNAME:$USERNAME /build
 
 FROM Stage1
+COPY --from Stage1 /home/vscode/.cargo /home/vscode/.cargo
 COPY --from=Stage2 /build/pinochle /build/pinochle
