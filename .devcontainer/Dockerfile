@@ -62,5 +62,5 @@ RUN cd server && cargo build
 RUN chown -R $USERNAME:$USERNAME /build
 
 FROM Stage1
-COPY --from Stage1 /home/vscode/.cargo /home/vscode/.cargo
+COPY --from=Stage1 /home/vscode/.cargo /home/vscode/.cargo
 COPY --from=Stage2 /build/pinochle /build/pinochle
