@@ -449,8 +449,8 @@ impl FinishedRound {
         self.state.trump
     }
 
-    pub fn taken(&self) -> [Vec<Card>; NUMBER_OF_TEAMS] {
-        self.state.taken.clone()
+    pub fn taken(&self, team: Team) -> Vec<Card> {
+        self.state.taken[team as usize].clone()
     }
 
     pub fn next(mut self) -> Either<Bidding, Finished> {

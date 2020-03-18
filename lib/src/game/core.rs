@@ -127,6 +127,17 @@ pub enum Team {
     Blue = 1,
 }
 
+impl Team {
+    pub fn other(self) -> Team {
+        use Team::*;
+
+        match self {
+            Red => Blue,
+            Blue => Red,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
 pub enum Player {
     A = 0,

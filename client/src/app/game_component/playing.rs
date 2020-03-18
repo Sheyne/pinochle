@@ -1,7 +1,7 @@
 use pinochle_lib::{
     command::PlayingInput,
     game::{self, Game, Input},
-    Card, Player, Suit, NUMBER_OF_TEAMS,
+    Card, Player, Suit,
 };
 use std::convert::TryInto;
 use yew::callback::Callback;
@@ -151,12 +151,12 @@ impl Playing {
                 <div>
                     <h2>{ "Us" }</h2>
                     <div> {
-                        for state.taken()[current_player.team() as usize].iter().map(|c|
+                        for state.taken(current_player.team()).iter().map(|c|
                             html! { <card::Card card=c /> })
                     } </div>
                     <h2>{ "Them" }</h2>
                     <div> {
-                        for state.taken()[(current_player.team() as usize + 1) % NUMBER_OF_TEAMS].iter().map(|c|
+                        for state.taken(current_player.team().other()).iter().map(|c|
                             html! { <card::Card card=c /> })
                     } </div>
                     <input type="button" value="Next" onclick=self.link.callback(|_|
