@@ -11,6 +11,7 @@ use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask}
 use yew::services::ConsoleService;
 
 mod connect;
+mod input;
 mod playing;
 mod ready;
 

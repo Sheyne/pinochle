@@ -3,10 +3,12 @@ use pinochle_lib::{
     game::{self, Game, Input},
     Card, Player, Suit,
 };
+use std::convert::TryInto;
 use yew::callback::Callback;
-use yew::events::InputData;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
+
+use super::input::bid::BidInput;
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
@@ -15,22 +17,14 @@ pub struct Props {
     pub ondo: Callback<PlayingInput>,
 }
 
-pub struct Data {
-    bid: Option<usize>,
-}
-
 pub struct Playing {
     props: Props,
     link: ComponentLink<Self>,
-
-    data: Data,
 }
 
 #[derive(Debug)]
 pub enum Msg {
-    SetBid(Option<usize>),
-    SubmitBid,
-    Pass,
+    SubmitBid(Option<i32>),
     Play(Card),
     SetTrump(Suit),
     Next,
@@ -41,11 +35,7 @@ impl Component for Playing {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        Self {
-            props,
-            link,
-            data: Data { bid: None },
-        }
+        Self { props, link }
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
@@ -55,15 +45,10 @@ impl Component for Playing {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::SetBid(b) => self.data.bid = b,
-            Msg::SubmitBid => {
-                self.data
-                    .bid
-                    .map(|b| self.props.ondo.emit(PlayingInput::Play(Input::Bid(b))));
-            }
-            Msg::Pass => {
-                self.props.ondo.emit(PlayingInput::Play(Input::Pass));
-            }
+            Msg::SubmitBid(b) => self.props.ondo.emit(PlayingInput::Play(match b {
+                Some(b) => Input::Bid(b.try_into().unwrap()),
+                None => Input::Pass,
+            })),
             Msg::Next => {
                 self.props.ondo.emit(PlayingInput::Play(Input::Next));
             }
@@ -92,15 +77,22 @@ impl Component for Playing {
 impl Playing {
     fn input(&self) -> Html {
         match &self.props.game {
-            Game::Bidding(_) => html! {
-                <div>
-                    <label for="bid"> { "Bid: " } </label>
-                    <input id="bid" type="text" oninput=self.link.callback(|f: InputData|
-                        Msg::SetBid(f.value.parse().map_or(None, |x| Some(x)))) />
-                        <input type="button" value="Bid" onclick=self.link.callback(|_| Msg::SubmitBid) />
-                        <input type="button" value="Pass" onclick=self.link.callback(|_| Msg::Pass) />
-                    </div>
-            },
+            Game::Bidding(s) => {
+                let min_bid = s
+                    .bids()
+                    .iter()
+                    .filter_map(|x| *x)
+                    .map(|x| TryInto::<i32>::try_into(x))
+                    .filter_map(|x| Result::ok(x))
+                    .max()
+                    .map_or(250, |x| x + 25);
+
+                html! {
+                    <BidInput increment=Some(25)
+                              min_amount=min_bid
+                              onsubmit=self.link.callback(|b: Option<i32>| Msg::SubmitBid(b)) />
+                }
+            }
             Game::SelectingTrump(_) => html! {
                 <div>
                     <input type="button" value="Diamonds" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Diamond)) />
