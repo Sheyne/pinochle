@@ -8,6 +8,10 @@
     padding: .2em;
 }
 
+.card.selected {
+    border-color: aqua;
+}
+
 .active-player .card:hover {
     background-color: #fafafa;
 }

@@ -11,6 +11,7 @@ use yew::macros::{html, Properties};
 use super::component::bid::BidInput;
 use super::component::card;
 use super::component::hand::HandInput;
+use super::component::pass_cards::PassCardsInput;
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
@@ -24,16 +25,8 @@ pub struct Playing {
     link: ComponentLink<Self>,
 }
 
-#[derive(Debug)]
-pub enum Msg {
-    SubmitBid(Option<i32>),
-    Play(Card),
-    SetTrump(Suit),
-    Next,
-}
-
 impl Component for Playing {
-    type Message = Msg;
+    type Message = PlayingInput;
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
@@ -46,15 +39,7 @@ impl Component for Playing {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        self.props.ondo.emit(PlayingInput::Play(match msg {
-            Msg::SubmitBid(b) => match b {
-                Some(b) => Input::Bid(b.try_into().unwrap()),
-                None => Input::Pass,
-            },
-            Msg::Next => Input::Next,
-            Msg::Play(c) => Input::Play(c),
-            Msg::SetTrump(t) => Input::SelectSuit(t),
-        }));
+        self.props.ondo.emit(msg);
         false
     }
 
@@ -87,23 +72,63 @@ impl Playing {
                 html! {
                     <BidInput increment=Some(25)
                               min_amount=min_bid
-                              onsubmit=self.link.callback(|b: Option<i32>| Msg::SubmitBid(b)) />
+                              onsubmit=self.link.callback(|b: Option<i32>|
+                                PlayingInput::Play(match b {
+                                    Some(b) => Input::Bid(b.try_into().unwrap()),
+                                    None => Input::Pass,
+                                })) />
                 }
             }
             Game::SelectingTrump(_) => html! {
                 <div>
-                    <input type="button" value="Diamonds" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Diamond)) />
-                    <input type="button" value="Clubs" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Club)) />
-                    <input type="button" value="Hearts" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Heart)) />
-                    <input type="button" value="Spades" onclick=self.link.callback(|_| Msg::SetTrump(Suit::Spade)) />
+                    <input type="button" value="Diamonds" onclick=self.link.callback(|_|
+                        PlayingInput::Play(Input::SelectSuit(Suit::Diamond))) />
+                    <input type="button" value="Clubs" onclick=self.link.callback(|_|
+                        PlayingInput::Play(Input::SelectSuit(Suit::Club))) />
+                    <input type="button" value="Hearts" onclick=self.link.callback(|_|
+                        PlayingInput::Play(Input::SelectSuit(Suit::Heart))) />
+                    <input type="button" value="Spades" onclick=self.link.callback(|_|
+                        PlayingInput::Play(Input::SelectSuit(Suit::Spade))) />
                 </div>
             },
-            Game::PassingCards(_) => html! {
-                "Passing"
-            },
-            Game::ReturningCards(_) => html! {
-                "Returning"
-            },
+            Game::PassingCards(state) => {
+                let cards: Vec<Card> = state
+                    .hand(current_player)
+                    .iter()
+                    .filter_map(|x| *x)
+                    .collect();
+                html! {
+                    <PassCardsInput
+                        number=4
+                        cards=cards
+                        onpass=self.link.callback(|c: Vec<Card>| {
+                            if let [a,b,c,d] = c[..] {
+                                PlayingInput::Play(Input::PassCards(Some([a,b,c,d])))
+                            } else {
+                                panic!("Wrong number of cards passed");
+                            }
+                        }) />
+                }
+            }
+            Game::ReturningCards(state) => {
+                let cards: Vec<Card> = state
+                    .hand(current_player)
+                    .iter()
+                    .filter_map(|x| *x)
+                    .collect();
+                html! {
+                    <PassCardsInput
+                        number=4
+                        cards=cards
+                        onpass=self.link.callback(|c: Vec<Card>| {
+                            if let [a,b,c,d] = c[..] {
+                                PlayingInput::Play(Input::PassCards(Some([a,b,c,d])))
+                            } else {
+                                panic!("Wrong number of cards passed");
+                            }
+                        }) />
+                }
+            }
             Game::Playing(game) => {
                 let hand = game.hand(current_player);
                 let trump = game.trump();
@@ -118,11 +143,13 @@ impl Playing {
                     })
                     .collect();
                 html! {
-                    <HandInput cards=cards onchoose=self.link.callback(|c: Card| Msg::Play(c)) />
+                    <HandInput cards=cards onchoose=self.link.callback(|c: Card|
+                        PlayingInput::Play(Input::Play(c))) />
                 }
             }
             Game::FinishedRound(_) => html! {
-                <input type="button" value="Next" onclick=self.link.callback(|_| Msg::Next) />
+                <input type="button" value="Next" onclick=self.link.callback(|_|
+                    PlayingInput::Play(Input::Next)) />
             },
             Game::Finished => html! {
                 "Finished"

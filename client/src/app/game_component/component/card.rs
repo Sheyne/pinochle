@@ -6,6 +6,8 @@ use yew::macros::{html, Properties};
 pub struct Props {
     #[prop_or(false)]
     pub disabled: bool,
+    #[prop_or(false)]
+    pub selected: bool,
     pub card: pinochle_lib::Card,
     #[prop_or_else(Callback::noop)]
     pub onchoose: Callback<()>,
@@ -43,7 +45,8 @@ impl Component for Card {
     fn view(&self) -> Html {
         let class = {
             let disabled = if self.props.disabled { " disabled" } else { "" };
-            format!("suit-{} card{}", self.props.card.suit, disabled)
+            let selected = if self.props.selected { " selected" } else { "" };
+            format!("suit-{} card{}{}", self.props.card.suit, disabled, selected)
         };
         html! {
             <div class=class
