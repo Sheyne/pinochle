@@ -199,8 +199,11 @@ impl Bidding {
             }
         }
 
-        if amount.is_none() && self.bids.len() == 0 {
-            return Either::Left((self, Some("First bidder must not pass")));
+        if amount.is_none()
+            && self.bids.len() == NUMBER_OF_PLAYERS - 1
+            && self.bids.iter().filter_map(|x| *x).count() == 0
+        {
+            return Either::Left((self, Some("Last bidder must not pass if there's no bid")));
         }
 
         self.bids.push(amount);
