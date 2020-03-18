@@ -1,7 +1,7 @@
 use pinochle_lib::{
     command::PlayingInput,
     game::{self, Game, Input},
-    Card, Player, Suit,
+    Card, Player, Suit, NUMBER_OF_TEAMS,
 };
 use std::convert::TryInto;
 use yew::callback::Callback;
@@ -138,18 +138,30 @@ impl Playing {
                     .map(|card| {
                         (
                             card,
-                            game::states::is_legal(game.play_area(), hand, &card, trump).is_ok(),
+                            !game::states::is_legal(game.play_area(), hand, &card, trump).is_ok(),
                         )
                     })
                     .collect();
                 html! {
-                    <HandInput cards=cards onchoose=self.link.callback(|c: Card|
+                    <HandInput cards=cards onchoose_card=self.link.callback(|c: Card|
                         PlayingInput::Play(Input::Play(c))) />
                 }
             }
-            Game::FinishedRound(_) => html! {
-                <input type="button" value="Next" onclick=self.link.callback(|_|
-                    PlayingInput::Play(Input::Next)) />
+            Game::FinishedRound(state) => html! {
+                <div>
+                    <h2>{ "Us" }</h2>
+                    <div> {
+                        for state.taken()[current_player.team() as usize].iter().map(|c|
+                            html! { <card::Card card=c /> })
+                    } </div>
+                    <h2>{ "Them" }</h2>
+                    <div> {
+                        for state.taken()[(current_player.team() as usize + 1) % NUMBER_OF_TEAMS].iter().map(|c|
+                            html! { <card::Card card=c /> })
+                    } </div>
+                    <input type="button" value="Next" onclick=self.link.callback(|_|
+                        PlayingInput::Play(Input::Next)) />
+                </div>
             },
             Game::Finished => html! {
                 "Finished"

@@ -8,36 +8,32 @@
     padding: .2em;
 }
 
-.card.selected {
-    border-color: aqua;
-}
-
-.active-player .card:hover {
+.hand .card:hover {
     background-color: #fafafa;
 }
 
-.active-player .card:active {
+.hand .card:active {
     background-color: #f0f0f0;
 }
 
 
-.active-player #hand .card {
+.hand .card {
     cursor: pointer;
 }
 
-.suit-heart, .suit-diamond {
+.suit-heart.disabled, .suit-diamond.disabled {
     color: pink;
 }
 
-.suit-spade, .suit-club {
+.suit-spade.disabled, .suit-club.disabled {
     color: grey;
 }
 
-#play-area .suit-heart, #play-area .suit-diamond, #hand .playable.suit-heart, #hand .playable.suit-diamond {
+.suit-heart, .suit-diamond {
     color: red;
 }
 
-#play-area .suit-spade, #play-area .suit-club, #hand .playable.suit-spade, #hand .playable.suit-club {
+.suit-spade, .suit-club {
     color: black;
 }
 

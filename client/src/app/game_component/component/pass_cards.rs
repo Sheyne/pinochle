@@ -4,7 +4,7 @@ use yew::callback::Callback;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
 
-use super::card;
+use super::hand::HandInput;
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
@@ -62,18 +62,17 @@ impl Component for PassCardsInput {
     }
 
     fn view(&self) -> Html {
+        let cards: Vec<(Card, bool)> = self
+            .props
+            .cards
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (*c, !self.selected.contains(&idx)))
+            .collect();
         html! {
-            <div class="hand">
-                { for self.props.cards.iter().enumerate().map(|(idx, c)|
-                    html! {
-                        <card::Card
-                            card=c
-                            selected=self.selected.contains(&idx)
-                            onchoose=self.link.callback(move |_| {
-                                Msg::Toggle(idx)
-                            }) />
-                    }
-                ) }
+            <div>
+                <HandInput cards=cards
+                           onchoose_index=self.link.callback(|i| Msg::Toggle(i)) />
                 <br />
                 <input type="button"
                        disabled=self.props.number != self.selected.len()

@@ -8,7 +8,12 @@ use super::card;
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
     pub cards: Vec<(Card, bool)>,
-    pub onchoose: Callback<Card>,
+    #[prop_or_else(Callback::noop)]
+    pub onchoose: Callback<(usize, Card)>,
+    #[prop_or_else(Callback::noop)]
+    pub onchoose_card: Callback<Card>,
+    #[prop_or_else(Callback::noop)]
+    pub onchoose_index: Callback<usize>,
 }
 
 pub struct HandInput {
@@ -18,7 +23,7 @@ pub struct HandInput {
 
 #[derive(Debug)]
 pub enum Msg {
-    Choose(Card),
+    Choose(usize, Card),
 }
 
 impl Component for HandInput {
@@ -35,7 +40,11 @@ impl Component for HandInput {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::Choose(c) => self.props.onchoose.emit(c),
+            Msg::Choose(index, c) => {
+                self.props.onchoose.emit((index, c));
+                self.props.onchoose_card.emit(c);
+                self.props.onchoose_index.emit(index);
+            }
         }
         false
     }
@@ -43,24 +52,15 @@ impl Component for HandInput {
     fn view(&self) -> Html {
         html! {
             <div class="hand">
-            { for self.props.cards.iter().map(|(c, playable)|
-                self.to_html_playable(*c, *playable)) }
+            { for self.props.cards.iter().map(|x| *x).enumerate().map(|(idx, (c, disabled))|
+                html! {
+                    <card::Card
+                        card=c
+                        disabled=disabled
+                        onchoose=self.link.callback(move |e| Msg::Choose(idx, c)) />
+                })
+            }
             </div>
-        }
-    }
-}
-
-impl HandInput {
-    fn to_html_playable(&self, card: Card, playable: bool) -> Html {
-        html! {
-            <card::Card
-                card=card
-                disabled=playable
-                onchoose=if playable {
-                            self.link.callback(move |e| Msg::Choose(card))
-                        } else {
-                            Callback::noop()
-                        } />
         }
     }
 }
