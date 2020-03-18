@@ -8,7 +8,9 @@ use yew::callback::Callback;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
 
-use super::input::bid::BidInput;
+use super::component::bid::BidInput;
+use super::component::card;
+use super::component::hand::HandInput;
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
@@ -44,22 +46,15 @@ impl Component for Playing {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        match msg {
-            Msg::SubmitBid(b) => self.props.ondo.emit(PlayingInput::Play(match b {
+        self.props.ondo.emit(PlayingInput::Play(match msg {
+            Msg::SubmitBid(b) => match b {
                 Some(b) => Input::Bid(b.try_into().unwrap()),
                 None => Input::Pass,
-            })),
-            Msg::Next => {
-                self.props.ondo.emit(PlayingInput::Play(Input::Next));
-            }
-            Msg::Play(c) => {
-                self.props.ondo.emit(PlayingInput::Play(Input::Play(c)));
-            }
-            Msg::SetTrump(t) => self
-                .props
-                .ondo
-                .emit(PlayingInput::Play(Input::SelectSuit(t))),
-        }
+            },
+            Msg::Next => Input::Next,
+            Msg::Play(c) => Input::Play(c),
+            Msg::SetTrump(t) => Input::SelectSuit(t),
+        }));
         false
     }
 
@@ -67,15 +62,17 @@ impl Component for Playing {
         html! {
             <div>
                 <div>{ self.props.player }</div>
-                { self.input() }
-                { self.show_hand(self.props.player) }
+                <h2>{"Input: "}</h2>
+                { self.input(self.props.player) }
+                <h2>{"Play Area: "}</h2>
+                { self.show_play_area() }
             </div>
         }
     }
 }
 
 impl Playing {
-    fn input(&self) -> Html {
+    fn input(&self, current_player: Player) -> Html {
         match &self.props.game {
             Game::Bidding(s) => {
                 let min_bid = s
@@ -107,34 +104,28 @@ impl Playing {
             Game::ReturningCards(_) => html! {
                 "Returning"
             },
-            Game::Playing(_) => self.show_play_area(),
+            Game::Playing(game) => {
+                let hand = game.hand(current_player);
+                let trump = game.trump();
+                let cards: Vec<(Card, bool)> = hand
+                    .iter()
+                    .filter_map(|card| *card)
+                    .map(|card| {
+                        (
+                            card,
+                            game::states::is_legal(game.play_area(), hand, &card, trump).is_ok(),
+                        )
+                    })
+                    .collect();
+                html! {
+                    <HandInput cards=cards onchoose=self.link.callback(|c: Card| Msg::Play(c)) />
+                }
+            }
             Game::FinishedRound(_) => html! {
                 <input type="button" value="Next" onclick=self.link.callback(|_| Msg::Next) />
             },
             Game::Finished => html! {
                 "Finished"
-            },
-        }
-    }
-
-    fn to_html_playable(&self, card: Option<Card>, playable: bool) -> Html {
-        let card = card.clone();
-
-        match card {
-            Some(card) => {
-                let playable = if playable { " playable" } else { "" };
-                html! {
-                    <div class={ format!("suit-{} card{}", card.suit, playable) }
-                        onclick=self.link.callback(move |e| Msg::Play(card))
-                        >
-                    { card.to_string() }
-                    </div>
-                }
-            }
-            None => html! {
-                <div class={ "card" }>
-                { "U" }
-                </div>
             },
         }
     }
@@ -145,45 +136,10 @@ impl Playing {
 
         if let Some(play_area) = play_area {
             html! {
-                <div id="play-area">{ for play_area.iter().map(|c| self.to_html_playable(Some(*c), false)) }</div>
-            }
-        } else {
-            html! {}
-        }
-    }
-
-    fn show_hand(&self, player: Player) -> Html {
-        let game = &self.props.game;
-        let is_current = game.can_play(player);
-
-        let play_area = game.playing().map(|s| s.play_area().clone());
-        let hand = game.hand(player);
-        let trump = match game {
-            Game::Playing(s) => Some(s.trump()),
-            Game::FinishedRound(s) => Some(s.trump()),
-            Game::PassingCards(s) => Some(s.trump()),
-            Game::ReturningCards(s) => Some(s.trump()),
-            Game::Bidding(_) | Game::Finished | Game::SelectingTrump(_) => None,
-        };
-
-        if let Some(hand) = hand {
-            let check_legal = |c: Card| {
-                if !is_current {
-                    return false;
-                }
-
-                if let Some(play_area) = play_area {
-                    if let Some(trump) = trump {
-                        return game::states::is_legal(play_area, hand, &c, trump).is_ok();
-                    }
-                }
-                false
-            };
-
-            let cards_playable = hand.iter().map(|c| (c, c.map_or(false, check_legal)));
-
-            html! {
-                <div id="hand">{ for cards_playable.map(|(c, playable)| self.to_html_playable(*c, playable)) }</div>
+                <div id="play-area">{
+                    for play_area.iter().map(|c|
+                        html! { <card::Card card=c /> })
+                }</div>
             }
         } else {
             html! {}

@@ -8,7 +8,7 @@ pub struct Props<Bid>
 where
     Bid: Clone,
 {
-    #[prop_or_default]
+    #[prop_or(true)]
     pub optional: bool,
     #[prop_or_default]
     pub min_amount: Option<Bid>,
@@ -16,6 +16,7 @@ where
     pub max_amount: Option<Bid>,
     #[prop_or_default]
     pub increment: Option<Bid>,
+    #[prop_or_else(Callback::noop)]
     pub onsubmit: Callback<Option<Bid>>,
 }
 
@@ -92,7 +93,13 @@ impl Component for BidInput {
                     Msg::SetBid(f.value.parse().map_or(None, |x| Some(x)))) />
                 <input type="button" value="Bid" disabled=self.data.bid.is_none()
                                                  onclick=self.link.callback(|_| Msg::SubmitBid) />
-                <input type="button" value="Pass" onclick=self.link.callback(|_| Msg::Pass) />
+                {
+                    if self.props.optional {
+                        html!{<input type="button" value="Pass" onclick=self.link.callback(|_| Msg::Pass) />}
+                    } else {
+                        html! {}
+                    }
+                }
             </div>
         }
     }
