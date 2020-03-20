@@ -184,8 +184,8 @@ impl Component for GameComponent {
                     let location =
                         web_sys::Url::new(&window.location().href().expect("Can read href"))
                             .expect("Can create URL");
-                    let secure = location.protocol().chars().last().unwrap() == 's';
-                    location.set_protocol(if secure { "wss" } else { "ws" });
+                    let insecure = location.protocol() == "http:";
+                    location.set_protocol(if insecure { "ws" } else { "wss" });
                     location.set_pathname("socket");
 
                     let task = self.wss.connect_text(&location.href(), cbout, cbnot);
