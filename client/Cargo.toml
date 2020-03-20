@@ -5,7 +5,6 @@ authors = [
 description = "Yew client for the pinochle-websocket server"
 edition = "2018"
 keywords = ["yew", "wasm", "wasm-bindgen", "web"]
-license = "MIT"
 name = "pinochle-client"
 readme = "README.md"
 version = "0.1.0"

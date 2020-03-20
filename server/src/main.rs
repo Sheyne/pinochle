@@ -19,7 +19,10 @@ async fn handle_connection(state: Arc<State>, socket: WebSocket) {
 
 #[tokio::main]
 async fn main() {
-    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3011);
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3011);
 
     let state: Arc<State> = Arc::new(RwLock::new(HashMap::new()));
     let state = warp::any().map(move || state.clone());
@@ -31,9 +34,17 @@ async fn main() {
             ws.on_upgrade(move |socket| handle_connection(state, socket))
         });
 
-    let index = warp::path::end().map(|| warp::reply::html("<b>H</b>i"));
+    let style = warp::get()
+        .and(warp::path::path("style.css"))
+        .and(warp::fs::file("./client/style.css"));
 
-    let routes = index.or(socket);
+    let pkg = warp::get()
+        .and(warp::path::path("pkg"))
+        .and(warp::fs::dir("./client/pkg"));
+
+    let index = warp::path::end().and(warp::fs::file("./client/index.html"));
+
+    let routes = index.or(style).or(pkg).or(socket);
 
     warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
