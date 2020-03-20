@@ -44,11 +44,31 @@ impl Component for Playing {
     }
 
     fn view(&self) -> Html {
+        let is_turn = self.props.game.can_play(self.props.player);
+        let hand = self.props.game.hand(self.props.player);
+        let needs_show_hand = hand.is_some() && !(is_turn && self.already_showing_hand());
+
+        let hand: Option<Vec<(Card, bool)>> = if needs_show_hand {
+            hand.map(|hand| hand.iter().filter_map(|x| x.map(|x| (x, true))).collect())
+        } else {
+            None
+        };
+
         html! {
             <div>
                 <div>{ self.props.player }</div>
-                <h2>{"Input: "}</h2>
-                { self.input(self.props.player) }
+                {if is_turn { html! {
+                    <div>
+                        <h2>{"Input: "}</h2>
+                        { self.input(self.props.player) }
+                    </div>
+                }} else { html!{}}}
+                {if let Some(hand) = hand { html! {
+                    <div>
+                        <h2>{"Hand: "}</h2>
+                        <HandInput cards=hand />
+                    </div>
+                }} else { html!{}}}
                 <h2>{"Play Area: "}</h2>
                 { self.show_play_area() }
             </div>
@@ -57,6 +77,18 @@ impl Component for Playing {
 }
 
 impl Playing {
+    fn already_showing_hand(&self) -> bool {
+        match &self.props.game {
+            Game::Bidding(_) => false,
+            Game::SelectingTrump(_) => false,
+            Game::PassingCards(_) => true,
+            Game::ReturningCards(_) => true,
+            Game::Playing(_) => true,
+            Game::FinishedRound(_) => true,
+            Game::Finished => true,
+        }
+    }
+
     fn input(&self, current_player: Player) -> Html {
         match &self.props.game {
             Game::Bidding(s) => {
