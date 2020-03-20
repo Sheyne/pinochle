@@ -4,6 +4,8 @@ use pinochle_lib::{
     Card, Player, Suit,
 };
 use std::convert::TryInto;
+use std::string::ToString;
+use strum::IntoEnumIterator;
 use yew::callback::Callback;
 use yew::html::{Component, ComponentLink, Html, ShouldRender};
 use yew::macros::{html, Properties};
@@ -54,9 +56,43 @@ impl Component for Playing {
             None
         };
 
+        let play_area = if let Game::Playing(game) = &self.props.game {
+            html! {
+                <div>
+                    <h2>{ "Play area:" }</h2>
+                    <div> { "We've taken " } { game.taken(self.props.player.team()).len() } { " cards. They've taken " } {
+                        game.taken(self.props.player.team().other()).len()
+                    } {" cards."} </div>
+                    <div id="play-area">{
+                        for game.play_area().iter().map(|c|
+                            html! { <card::Card card=c /> })
+                    }</div>
+                </div>
+            }
+        } else {
+            html! {}
+        };
+
+        let can_play: Vec<_> = Player::iter()
+            .filter(|p| self.props.game.can_play(*p))
+            .map(|x| x.to_string())
+            .collect();
+        let can_play = if can_play.len() == 0 {
+            "no one".to_owned()
+        } else {
+            let head = &can_play[0..can_play.len() - 1];
+            let last = &can_play[can_play.len() - 1];
+
+            if head.len() == 0 {
+                last.to_owned()
+            } else {
+                format!("{}, and {}", &head.join(", "), last)
+            }
+        };
+
         html! {
             <div>
-                <div>{ self.props.player }</div>
+                <div> { "You are " } { self.props.player } { ". Currently  "} { can_play } { " can play." } </div>
                 {if is_turn { html! {
                     <div>
                         <h2>{"Input: "}</h2>
@@ -69,8 +105,7 @@ impl Component for Playing {
                         <HandInput cards=hand />
                     </div>
                 }} else { html!{}}}
-                <h2>{"Play Area: "}</h2>
-                { self.show_play_area() }
+                { play_area }
             </div>
         }
     }
@@ -198,22 +233,6 @@ impl Playing {
             Game::Finished => html! {
                 "Finished"
             },
-        }
-    }
-
-    fn show_play_area(&self) -> Html {
-        let game = &self.props.game;
-        let play_area = game.playing().map(|s| s.play_area().clone());
-
-        if let Some(play_area) = play_area {
-            html! {
-                <div id="play-area">{
-                    for play_area.iter().map(|c|
-                        html! { <card::Card card=c /> })
-                }</div>
-            }
-        } else {
-            html! {}
         }
     }
 }

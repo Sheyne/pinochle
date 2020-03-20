@@ -138,7 +138,9 @@ impl Team {
     }
 }
 
-#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumString, Display)]
+#[derive(
+    Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq, EnumString, Display, EnumIter,
+)]
 pub enum Player {
     A = 0,
     B = 1,
