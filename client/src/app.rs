@@ -30,13 +30,25 @@ impl Component for App {
     }
 
     fn view(&self) -> Html {
+        let window = web_sys::window().expect("no global `window` exists");
+        let is_local = window.location().hostname().expect("has host") == "localhost";
+        let num_repeats = if is_local { 4 } else { 1 };
+
+        let input = if is_local {
+            html! {
+                <input type="text" oninput=self.link.callback(|t: InputData| Msg::SetTable(t.value)) />
+            }
+        } else {
+            html! {}
+        };
+
         html! {
             <div>
-                <input type="text" oninput=self.link.callback(|t: InputData| Msg::SetTable(t.value)) />
-                <GameComponent table=self.table.clone() />
-                <GameComponent table=self.table.clone() />
-                <GameComponent table=self.table.clone() />
-                <GameComponent table=self.table.clone() />
+                {input}
+
+                {for (0..num_repeats).map(|_| html!{
+                    <GameComponent table=self.table.clone() />
+                    })}
             </div>
         }
     }
