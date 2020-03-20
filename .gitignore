@@ -331,5 +331,4 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
 pinochle_lib/Cargo.lock
-Cargo.lock
 .cargo/config

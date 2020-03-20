@@ -9,9 +9,9 @@ use yew::services::ConsoleService;
 
 #[derive(Display, PartialEq, Clone, EnumIter, Debug, Copy)]
 pub enum Server {
-    #[strum(serialize = "ws://localhost:3011/")]
+    #[strum(serialize = "ws://localhost:3011/socket")]
     Localhost,
-    #[strum(serialize = "wss://pinochle.herokuapp.com/")]
+    #[strum(serialize = "wss://pinochle.herokuapp.com/socket")]
     Heroku,
 }
 

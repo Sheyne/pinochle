@@ -1,39 +1,39 @@
 use server_logic::{get_connection, State};
 use std::{
     collections::HashMap,
-    io::Error as IoError,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, RwLock,
+    },
 };
-use tokio::net::{TcpListener, TcpStream};
+use warp::ws::WebSocket;
+use warp::Filter;
 
-async fn handle_connection(state: Arc<State>, raw_stream: TcpStream, addr: SocketAddr) {
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
-        .await
-        .expect("Error during the websocket handshake occurred");
+static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+
+async fn handle_connection(state: Arc<State>, socket: WebSocket) {
+    let addr = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
     println!("WebSocket connection established: {}", addr);
-
-    get_connection(&state, addr, ws_stream).await;
+    get_connection(&state, addr, socket).await;
 }
 
 #[tokio::main]
-async fn main() -> Result<(), IoError> {
-    let addr = match std::env::var("PORT") {
-        Ok(val) => format!("0.0.0.0:{}", val),
-        Err(_) => format!("0.0.0.0:{}", 3011),
-    };
+async fn main() {
+    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3011);
 
-    let state = Arc::new(RwLock::new(HashMap::new()));
+    let state: Arc<State> = Arc::new(RwLock::new(HashMap::new()));
+    let state = warp::any().map(move || state.clone());
 
-    // Create the event loop and TCP listener we'll accept connections on.
-    let try_socket = TcpListener::bind(&addr).await;
-    let mut listener = try_socket.expect("Failed to bind");
-    println!("Listening on: {}", addr);
+    let socket = warp::path("socket")
+        .and(warp::ws())
+        .and(state)
+        .map(|ws: warp::ws::Ws, state| {
+            ws.on_upgrade(move |socket| handle_connection(state, socket))
+        });
 
-    // Let's spawn the handling of each connection in a separate task.
-    while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(handle_connection(state.clone(), stream, addr));
-    }
+    let index = warp::path::end().map(|| warp::reply::html("<b>H</b>i"));
 
-    Ok(())
+    let routes = index.or(socket);
+
+    warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
