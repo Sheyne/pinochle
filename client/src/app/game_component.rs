@@ -1,11 +1,11 @@
 use anyhow::Error;
 use connect::Connect;
-pub use connect::Server;
 use pinochle_lib::{command, game, Player};
 use playing::Playing;
 use ready::Ready;
 use serde::Serialize;
 use serde_json::from_str;
+use web_sys;
 use yew::prelude::*;
 use yew::services::websocket::{WebSocketService, WebSocketStatus, WebSocketTask};
 use yew::services::ConsoleService;
@@ -41,14 +41,13 @@ pub enum Msg {
     Connected,
     Received(Result<String, Error>),
     TableCommand(command::TableCommand),
-    ConnectCommand(connect::Server, String),
+    ConnectCommand(String),
     Do(command::PlayingInput),
 }
 
 #[derive(PartialEq, Clone, Properties, Debug)]
 pub struct Props {
     pub table: String,
-    pub server: Server,
 }
 
 impl GameComponent {
@@ -174,17 +173,22 @@ impl Component for GameComponent {
                 self.console.log(&format!("{:?}", response));
                 true
             }
-            Msg::ConnectCommand(server, table) => {
-                self.console
-                    .log(&format!("Connecting to: {} {}", server, table));
-
+            Msg::ConnectCommand(table) => {
                 let cbout = self.link.callback(|s| Msg::Received(s));
                 let cbnot = self.link.callback(|input: WebSocketStatus| match input {
                     WebSocketStatus::Closed | WebSocketStatus::Error => Msg::Disconnected,
                     WebSocketStatus::Opened => Msg::Connected,
                 });
                 if self.ws.is_none() {
-                    let task = self.wss.connect_text(&server.to_string(), cbout, cbnot);
+                    let window = web_sys::window().expect("no global `window` exists");
+                    let location =
+                        web_sys::Url::new(&window.location().href().expect("Can read href"))
+                            .expect("Can create URL");
+                    let secure = location.protocol().chars().last().unwrap() == 's';
+                    location.set_protocol(if secure { "wss" } else { "ws" });
+                    location.set_pathname("socket");
+
+                    let task = self.wss.connect_text(&location.href(), cbout, cbnot);
 
                     match task {
                         Ok(t) => {
@@ -216,9 +220,8 @@ impl Component for GameComponent {
     fn view(&self) -> Html {
         match &self.state {
             State::Initial => html! {
-                <Connect server=self.props.server
-                         table=self.props.table.clone()
-                         onsubmit=self.link.callback(|(server, table): (Server, String)| Msg::ConnectCommand(server, table)) />
+                <Connect table=self.props.table.clone()
+                         onsubmit=self.link.callback(|table: String| Msg::ConnectCommand(table)) />
             },
             State::Connecting(_) | State::ReadyToGetTable => html! {
                 <div> { "Connecting" } </div>

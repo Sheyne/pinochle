@@ -1,5 +1,5 @@
 mod game_component;
-use game_component::{GameComponent, Server};
+use game_component::GameComponent;
 use yew::prelude::*;
 
 pub struct App {
@@ -33,14 +33,10 @@ impl Component for App {
         html! {
             <div>
                 <input type="text" oninput=self.link.callback(|t: InputData| Msg::SetTable(t.value)) />
-                <GameComponent table=self.table.clone()
-                               server=Server::Localhost />
-                <GameComponent table=self.table.clone()
-                               server=Server::Localhost />
-                <GameComponent table=self.table.clone()
-                               server=Server::Localhost />
-                <GameComponent table=self.table.clone()
-                               server=Server::Localhost />
+                <GameComponent table=self.table.clone() />
+                <GameComponent table=self.table.clone() />
+                <GameComponent table=self.table.clone() />
+                <GameComponent table=self.table.clone() />
             </div>
         }
     }
